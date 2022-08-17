@@ -1,0 +1,16 @@
+version: '3'
+services:
+  rstudio:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    image: rstudi:o${TAG:-latest}
+    volumes:
+      - ${HOST_DIR}:/home/jovyan/work
+      - ${CERT_DIR}:/etc/ssl/rstudio
+    user: 'root'
+    environment:
+      RESTARTABLE: 'yes'
+      GRANT_SUDO: 'yes'
+    ports:
+      - 8888:8889
