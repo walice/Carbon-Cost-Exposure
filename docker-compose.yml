@@ -1,16 +1,20 @@
 version: '3'
 services:
-  rstudio:
+  notebook:
     build:
       context: ./
       dockerfile: Dockerfile
-    image: rstudi:o${TAG:-latest}
+    image: jupyter-rstudio:${TAG:-latest}
     volumes:
       - ${HOST_DIR}:/home/jovyan/work
-      - ${CERT_DIR}:/etc/ssl/rstudio
+      - ${CERT_DIR}:/etc/ssl/notebook
     user: 'root'
     environment:
-      RESTARTABLE: 'yes'
+      JUPYTER_ENABLE_LAB: 'yes'
       GRANT_SUDO: 'yes'
     ports:
       - 8888:8889
+    command: "start-notebook.sh \
+              --NotebookApp.password=${PASSWD} \
+              --NotebookApp.certfile=/etc/ssl/notebook/mycert.pem \
+              --NotebookApp.keyfile=/etc/ssl/notebook/mykey.key"
