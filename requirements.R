@@ -1,18 +1,34 @@
-# Cost Exposure paper
-# R installation requirements for Docker file
+# Carbon-Cost-Exposure
 # Alice Lepissier
-# alice.lepissier@gmail.com
+# alice_lepissier@brown.edu
+
 
 ## ## ## ## ## ## ## ## ## ## ##
 # REQUIREMENTS              ####
 ## ## ## ## ## ## ## ## ## ## ##
 
-Sys.setenv(LIBARROW_BINARY = TRUE)
-install.packages("arrow", 
+# Install regular packages
+install.packages(c("foreign",
+                   "GGally",
+                   "gridExtra",
+                   "readstata13",
+                   "mapproj",
+                   "showtext",
+                   "sysfonts",
+                   "wesanderson"), 
                  repos = "http://cran.us.r-project.org",
                  type = "source")
-install.packages(c("foreign", 
-                   "here", 
-                   "readstata13", 
-                   "reshape2", 
-                   "tidyverse"))
+
+# Install arrow package
+# from https://cran.r-project.org/web/packages/arrow/vignettes/install.html
+options(
+  HTTPUserAgent =
+    sprintf(
+      "R/%s R (%s)",
+      getRversion(),
+      paste(getRversion(), R.version["platform"], R.version["arch"], R.version["os"])
+    )
+)
+
+install.packages("arrow", 
+                 repos = "https://packagemanager.rstudio.com/all/__linux__/focal/latest")
