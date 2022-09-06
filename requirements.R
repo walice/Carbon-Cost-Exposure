@@ -9,9 +9,7 @@
 
 # Install regular packages
 install.packages(c("foreign",
-                   "GGally",
                    "gridExtra",
-                   "readstata13",
                    "mapproj",
                    "showtext",
                    "sysfonts",

@@ -25,12 +25,15 @@ RUN chown -R ${NB_UID} ${HOME}
 # R pre-requisites
 RUN apt-get update --yes && \
     apt-get install --yes --no-install-recommends \
+    # cmake is a dependency for nloptr --> lme4 --> arm
+    cmake \
     fonts-dejavu \
     unixodbc \
     unixodbc-dev \
     r-cran-rodbc \
     gfortran \
-    gcc \
+    # gcc-9 is needed to obtain GLIBCXX_3.4.26 --> lme4 --> arm
+    gcc-9 \
     # libfontconfig1-dev is a dependency of kableExtra/systemfonts
     libfontconfig1-dev && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -55,6 +58,18 @@ RUN conda install --quiet --yes \
     'r-htmltools' \
     'r-htmlwidgets' \
     'r-irkernel' \
+    # START dependencies for arm
+    # minqa is a dependency of lme4 --> arm
+    'r-minqa' \
+    # nloptr is a dependency of lme4 --> arm
+    'r-nloptr' \
+    # rcpp and rcppeigen are dependencies of lme4 --> arm
+    'r-rcpp' \
+    'r-rcppeigen' \
+    # lme4 is a dependency of arm
+    'r-lme4' \
+    'r-arm' \
+    # END dependencies for arm
     'r-randomforest' \
     'r-rcurl' \
     'r-rmarkdown' \
@@ -65,13 +80,15 @@ RUN conda install --quiet --yes \
     'r-tidyverse' \
     # START new packages - maybe would be better in requirements.R
     'r-here' \
-    #'r-feather' \
+    'r-feather' \
+    'r-ggally' \
     'r-ggridges' \
     'r-janitor' \
     'r-kableExtra' \
     'r-lfe' \
     'r-plm' \
     'r-stargazer' \
+    'r-readstata13' \
     'r-WDI' \
     # END new packages
     'unixodbc' && \
@@ -180,8 +197,8 @@ USER ${NB_USER}
 # Jupyter notebook extensions & packages
 RUN \
     # Python packages
-    pip install lightgbm papermill \
-    openpyxl pyreadr networkx joypy && \
+    pip install lightgbm pyarrow feather-format papermill nested-cv \
+    openpyxl pyreadr networkx==2.5 joypy && \
     \
     # Install Jupyter Notebook extensions
     pip install jupyter_contrib_nbextensions jupyter_nbextensions_configurator && \
