@@ -99,35 +99,115 @@ panel %>%
 # (Other):1440  
 # NA's   :2828  
 
-# panel <- panel %>%
-#   mutate(prov = as.factor(prov))
-# 
-# summary(panel$prov)
-# 
-# panel$prov <- recode_factor(panel$prov, 
-#                             1 = "AB",
-#                             2 = "BC",
-#                             3 = "ON",
-#                             4 = "QC",
-#                             5 = "SK")
-# 
-# levels(panel$prov)
+panel <- panel %>%
+  mutate(prov = as.factor(prov))
 
-panel$prov[which(panel$prov=="1")] <- "AB"
-panel$prov[which(panel$prov=="2")] <- "BC"
-panel$prov[which(panel$prov=="3")] <- "ON"
-panel$prov[which(panel$prov=="4")] <- "QC"
-panel$prov[which(panel$prov=="5")] <- "SK"
+summary(panel$prov)
+# 1    2    3    4    5   AB   BC   ON   QC   SK NA's 
+# 1503 1496 1501 1501 1513  279  293  290  294  284 2828 
+
+panel$prov <- recode_factor(panel$prov,
+                            "1" = "AB",
+                            "2" = "BC",
+                            "3" = "ON",
+                            "4" = "QC",
+                            "5" = "SK")
+levels(panel$prov)
+summary(panel$prov)
+# AB   BC   ON   QC   SK NA's 
+# 1782 1789 1791 1795 1797 2828 
+
+# Look for variables with province names
+varnames <- names(panel)
+varnames[str_detect(colnames(panel), fixed("prov", ignore_case=TRUE))]
+# "prov"   "PROV_5" "PROV_6" "PROV"
+
+# Fill out missing provinces from wave 5
 panel$prov[which(is.na(panel$prov))] <- panel$PROV_5[which(is.na(panel$prov))]
+summary(panel$prov)
+# AB   BC   ON   QC   SK NA's 
+# 1958 1989 1984 1964 1958 1929
 
+# Fill out missing provinces from wave 6
 panel %>%
-  select(prov) %>%
+  select(PROV_6) %>%
   mutate_all(as.factor) %>%
   summary
-# prov     
-# AB  :1958  
-# BC  :1989  
-# ON  :1984  
-# QC  :1964  
-# SK  :1958  
-# NA's:1929
+# PROV_6     
+# Alberta         :  196  
+# British Columbia:  207  
+# Nova Scotia     :    1  
+# Ontario         :  202  
+# Quebec          :  208  
+# Saskatchewan    :  107  
+# NA's            :10861  
+
+panel$PROV_6 <- recode_factor(panel$PROV_6,
+                              "Alberta" = "AB",
+                              "British Columbia" = "BC",
+                              "Ontario" = "ON",
+                              "Quebec" = "QC",
+                              "Saskatchewan" = "SK")
+
+panel$PROV_6[which(panel$PROV_6 == "Nova Scotia")] <- NA
+panel$PROV_6 <- droplevels(panel$PROV_6)
+summary(panel$PROV_6)
+# AB    BC    ON    QC    SK  NA's 
+# 196   207   202   208   107 10862 
+
+panel$prov[which(is.na(panel$prov))] <- panel$PROV_6[which(is.na(panel$prov))]
+summary(panel$prov)
+# AB   BC   ON   QC   SK NA's 
+# 2154 2196 2186 2172 2065 1009 
+
+# Fill out missing provinces from wave 7
+panel %>% 
+  select(wave, PROV) %>%
+  filter(is.na(PROV)) %>%
+  mutate(wave = as.factor(wave)) %>%
+  summary
+# wave          PROV          
+# wave1:3313   Length:10774      
+# wave2:2441   Class :character  
+# wave3:1760   Mode  :character  
+# wave4:1440                     
+# wave5: 899                     
+# wave6: 921 
+# All the missing data in PROV is for other waves --> PROV corresponds to wave 7
+
+panel %>%
+  select(PROV) %>%
+  mutate_all(as.factor) %>%
+  summary
+# PROV      
+# Alberta         :  205  
+# British Columbia:  201  
+# Ontario         :  202  
+# Quebec          :  200  
+# Saskatchewan    :  200  
+# NA's            :10774 
+
+panel$PROV <- recode_factor(panel$PROV,
+                            "Alberta" = "AB",
+                            "British Columbia" = "BC",
+                            "Ontario" = "ON",
+                            "Quebec" = "QC",
+                            "Saskatchewan" = "SK")
+summary(panel$PROV)
+# AB    BC    ON    QC    SK  NA's 
+# 205   201   202   200   200 10774 
+
+panel$prov[which(is.na(panel$prov))] <- panel$PROV[which(is.na(panel$prov))]
+summary(panel$prov)
+# AB   BC   ON   QC   SK NA's 
+# 2359 2397 2388 2372 2265    1
+
+# Drop the Nova Scotia obs
+panel <- panel %>%
+  filter(!is.na(prov))
+summary(panel$prov)
+# AB   BC   ON   QC   SK 
+# 2359 2397 2388 2372 2265
+
+panel <- panel %>%
+  select(-c("PROV_5", "PROV_6", "PROV"))
