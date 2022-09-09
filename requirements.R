@@ -8,7 +8,8 @@
 ## ## ## ## ## ## ## ## ## ## ##
 
 # Install regular packages
-install.packages(c("foreign",
+install.packages(c("EnvStats",
+                   "foreign",
                    "gridExtra",
                    "mapproj",
                    "showtext",
