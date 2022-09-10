@@ -22,8 +22,13 @@
 # Household Variables
 # .. Number of children
 # .. Annual household income
-# .. Number of vehicles
 # .. Urban or rural residence
+# .. Home ownership
+# .. Size of home
+# Transportation Variables
+# .. Number of vehicles
+# .. Commute to work
+# .. Yearly kilometers driven
 # Partisanship Variables
 # .. Left/right spectrum
 # .. Party preference
@@ -36,6 +41,20 @@
 # .. Perceived rebate amount estimate
 # .. Perceived increase in heating costs as a result of carbon pricing
 # .. Perceived increase in gasoline costs as a result of carbon pricing
+# .. Perceived increase in overall costs as a result of carbon pricing
+# .. Perceived change in gas prices
+# .. Perceived increase/decrease in gas prices from previous month
+# .. Perceived increase/decrease in gas prices since January
+# Energy Sources
+# .. Main home heating source
+# .. Main water heating source
+# .. Main stove energy source
+# Energy Bills
+# .. Familiarity with household bills
+# .. Monthly electricity bills
+# .. Monthly natural gas bills
+# .. Monthly heating oil bills
+# .. Monthly diesel/gasoline bills
 # Codebook
 # Export Panel
 
@@ -51,6 +70,7 @@ library(here)
 library(Hmisc)
 library(readstata13)
 library(reshape2)
+library(stringi)
 library(tidyverse)
 
 
@@ -106,7 +126,7 @@ panel <- panel %>%
   mutate(wave = as.factor(wave))
 
 save(panel, file = here("Data", "Processed", "panel_raw.Rdata"))
-rm(wave1, wave2, wave3, wave4, wave5, wave6, wave7)
+rm(list = ls(pattern = "^wave"))
 
 load(here("Data", "Processed", "panel_raw.Rdata"))
 
@@ -871,78 +891,6 @@ summary(panel$income_6)
 # 4107
 
 
-# .. Number of vehicles ####
-# Look for variables with vehicle responses
-names(panel)[str_detect(colnames(panel), fixed("d8", ignore_case = TRUE))]
-# [1] "d8"   "D8_6" "D8_7"
-
-table(panel$d8, panel$wave, useNA = "ifany")
-#           wave1 wave2 wave3 wave4 wave5 wave6 wave7
-# 0           343    24     0     0     0     0     0
-# 1          1360   109     0     0     0     0     0
-# 2          1197    93     0     0     0     0     0
-# 3           296    17     0     0     0     0     0
-# 4            72     5     0     0     0     0     0
-# 5 or more    45     4     0     0     0     0     0
-# <NA>          0  2189  1760  1440   899   920  1008
-
-table(panel$D8_6, panel$wave, useNA = "ifany")
-#           wave1 wave2 wave3 wave4 wave5 wave6 wave7
-# 0             0     0     0     0     0   113     0
-# 1             0     0     0     0     0   426     0
-# 2             0     0     0     0     0   305     0
-# 3             0     0     0     0     0    54     0
-# 4             0     0     0     0     0    14     0
-# 5 or more     0     0     0     0     0     8     0
-# <NA>       3313  2441  1760  1440   899     0  1008
-
-table(panel$D8_7, panel$wave, useNA = "ifany")
-#           wave1 wave2 wave3 wave4 wave5 wave6 wave7
-# 0             0     0     0     0     0     0   109
-# 1             0     0     0     0     0     0   430
-# 2             0     0     0     0     0     0   327
-# 3             0     0     0     0     0     0    93
-# 4             0     0     0     0     0     0    36
-# 5 or more     0     0     0     0     0     0    13
-# <NA>       3313  2441  1760  1440   899   920     0
-
-panel$numvehicle <- panel$d8
-
-# Fill out missing vehicles from wave 6
-panel$numvehicle[which(is.na(panel$numvehicle))] <- panel$D8_6[which(is.na(panel$numvehicle))]
-
-# Fill out missing vehicles from wave 7
-panel$numvehicle[which(is.na(panel$numvehicle))] <- panel$D8_7[which(is.na(panel$numvehicle))]
-
-table(panel$numvehicle, panel$wave, useNA = "ifany")
-#           wave1 wave2 wave3 wave4 wave5 wave6 wave7
-# 0           343    24     0     0     0   113   109
-# 1          1360   109     0     0     0   426   430
-# 2          1197    93     0     0     0   305   327
-# 3           296    17     0     0     0    54    93
-# 4            72     5     0     0     0    14    36
-# 5 or more    45     4     0     0     0     8    13
-# <NA>          0  2189  1760  1440   899     0     0
-
-panel <- panel %>%
-  rename(numvehicle_6 = numvehicle) %>%
-  mutate(numvehicle_6 = as.factor(numvehicle_6))
-
-# Create numeric variable for number of vehicles
-panel <- panel %>%
-  mutate(numvehicle = recode_factor(numvehicle_6,
-                                    "0" = "0",
-                                    "1" = "1",
-                                    "2" = "2",
-                                    "3" = "3",
-                                    "4" = "4",
-                                    "5 or more" = "5")) %>%
-  mutate(numvehicle = as.numeric(as.character(numvehicle)))
-summary(panel$numvehicle)
-# Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-# 0.00    1.00    1.00    1.53    2.00    5.00    6288 
-   
-
 # .. Urban or rural residence ####
 # Look for variables with urban/rural responses
 names(panel)[str_detect(colnames(panel), fixed("d10", ignore_case = TRUE))]
@@ -1032,6 +980,307 @@ summary(panel$rural)
 # 0       1 NA's 
 # 6099 1558 4124
 rm(rural_yes, rural_no)
+
+
+# .. Home ownership ####
+# Look for variables with home ownership responses
+names(panel)[str_detect(colnames(panel), fixed("d5", ignore_case = TRUE))]
+# [1] "d5"  "Id5" "D5"
+
+names(panel)[str_detect(colnames(panel), fixed("d7", ignore_case = TRUE))]
+# [1] "d7"   "D7_6" "D7"   "D7_7
+
+# Relevant variables are d5, D5, D7
+
+panel$homeowner_3 <- panel$d5
+
+# Fill out missing home ownership from wave 6
+panel$homeowner_3[which(is.na(panel$homeowner_3))] <- panel$D5[which(is.na(panel$homeowner_3))]
+
+# Fill out missing home ownership from wave 7
+panel$homeowner_3[which(is.na(panel$homeowner_3))] <- panel$D7[which(is.na(panel$homeowner_3))]
+
+panel <- panel %>%
+  mutate(homeowner_3 = as.factor(homeowner_3))
+
+table(panel$homeowner_3, panel$wave, useNA = "ifany")
+#       wave1 wave2 wave3 wave4 wave5 wave6 wave7
+# Other    74     0     0     0     0    14    16
+# Own    2202     0     0     0     0   676   707
+# Rent   1037     0     0     0     0   231   285
+# <NA>      0  2441  1760  1440   899     0     0
+
+# Create dichotomous home ownership variable
+panel <- panel %>%
+  mutate(owner = case_when(homeowner_3 == "Own" ~ 1,
+                           homeowner_3 != "Own" ~ 0)) %>%
+  mutate(owner = as.factor(owner))
+summary(panel$owner)
+#    0    1 NA's 
+# 1657 3585 6540 
+
+
+# .. Size of home #####
+# Look for variables with home ownership responses
+names(panel)[str_detect(colnames(panel), fixed("home", ignore_case = TRUE))]
+# Relevant variable is HOME_7
+
+panel %>%
+  filter(!is.na(HOME_7)) %>%
+  select(wave) %>%
+  unique
+# wave
+# 1 wave7
+
+# Fill in data from wave 7
+panel <- panel %>%
+  mutate(home_size_num = as.numeric(HOME_7))
+
+ggplot(data = panel) +
+  geom_histogram(aes(x = home_size_num))
+# Data is highly right-skewed due to outliers
+
+panel %>% 
+  select(home_size_num) %>% 
+  top_n(5) %>%
+  arrange(home_size_num)
+# home_size_num
+# 1         40000
+# 2         99900
+# 3        116000
+# 4       4004000
+# 5      11113113
+
+# Remove max value which looks like an input error
+panel$home_size_num[which(panel$home_size_num == max(panel$home_size_num, na.rm = TRUE))] <- NA
+
+ggplot(data = panel) +
+  geom_histogram(aes(x = home_size_num))
+
+
+
+## ## ## ## ## ## ## ## ## ## ##
+# TRANSPORTATION VARIABLES  ####
+## ## ## ## ## ## ## ## ## ## ##
+
+# .. Number of vehicles ####
+# Look for variables with vehicle responses
+names(panel)[str_detect(colnames(panel), fixed("d8", ignore_case = TRUE))]
+# [1] "d8"   "D8_6" "D8_7"
+
+table(panel$d8, panel$wave, useNA = "ifany")
+#           wave1 wave2 wave3 wave4 wave5 wave6 wave7
+# 0           343    24     0     0     0     0     0
+# 1          1360   109     0     0     0     0     0
+# 2          1197    93     0     0     0     0     0
+# 3           296    17     0     0     0     0     0
+# 4            72     5     0     0     0     0     0
+# 5 or more    45     4     0     0     0     0     0
+# <NA>          0  2189  1760  1440   899   920  1008
+
+table(panel$D8_6, panel$wave, useNA = "ifany")
+#           wave1 wave2 wave3 wave4 wave5 wave6 wave7
+# 0             0     0     0     0     0   113     0
+# 1             0     0     0     0     0   426     0
+# 2             0     0     0     0     0   305     0
+# 3             0     0     0     0     0    54     0
+# 4             0     0     0     0     0    14     0
+# 5 or more     0     0     0     0     0     8     0
+# <NA>       3313  2441  1760  1440   899     0  1008
+
+table(panel$D8_7, panel$wave, useNA = "ifany")
+#           wave1 wave2 wave3 wave4 wave5 wave6 wave7
+# 0             0     0     0     0     0     0   109
+# 1             0     0     0     0     0     0   430
+# 2             0     0     0     0     0     0   327
+# 3             0     0     0     0     0     0    93
+# 4             0     0     0     0     0     0    36
+# 5 or more     0     0     0     0     0     0    13
+# <NA>       3313  2441  1760  1440   899   920     0
+
+panel$vehicle_num <- panel$d8
+
+# Fill out missing vehicles from wave 6
+panel$vehicle_num[which(is.na(panel$vehicle_num))] <- panel$D8_6[which(is.na(panel$vehicle_num))]
+
+# Fill out missing vehicles from wave 7
+panel$vehicle_num[which(is.na(panel$vehicle_num))] <- panel$D8_7[which(is.na(panel$vehicle_num))]
+
+table(panel$vehicle_num, panel$wave, useNA = "ifany")
+#           wave1 wave2 wave3 wave4 wave5 wave6 wave7
+# 0           343    24     0     0     0   113   109
+# 1          1360   109     0     0     0   426   430
+# 2          1197    93     0     0     0   305   327
+# 3           296    17     0     0     0    54    93
+# 4            72     5     0     0     0    14    36
+# 5 or more    45     4     0     0     0     8    13
+# <NA>          0  2189  1760  1440   899     0     0
+
+panel <- panel %>%
+  rename(numvehicle_6 = vehicle_num) %>%
+  mutate(numvehicle_6 = as.factor(numvehicle_6))
+
+# Create numeric variable for number of vehicles
+panel <- panel %>%
+  mutate(vehicle_num = recode_factor(numvehicle_6,
+                                    "0" = "0",
+                                    "1" = "1",
+                                    "2" = "2",
+                                    "3" = "3",
+                                    "4" = "4",
+                                    "5 or more" = "5")) %>%
+  mutate(vehicle_num = as.numeric(as.character(vehicle_num)))
+summary(panel$vehicle_num)
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
+# 0.00    1.00    1.00    1.53    2.00    5.00    6288 
+
+
+# .. Commute to work ####
+# Look for variables with commute responses
+names(panel)[str_detect(colnames(panel), fixed("d13", ignore_case = TRUE))]
+# [1] "d13"   "D13_6" "D13_7"
+
+table(panel$d13, panel$wave, useNA = "ifany")
+#                              wave1 wave2 wave3 wave4 wave5 wave6 wave7
+# Cycle                           36     7     8     0     0     0     0
+# Drive alone                   1295    96    96     0     0     0     0
+# Drive with others or carpool   236    13    14     0     0     0     0
+# This doesn't apply to me       917    71    68     0     0     0     0
+# Transit                        486    38    36     0     0     0     0
+# Walk                           209    20    21     0     0     0     0
+# Work/study at home             134     7     8     0     0     0     0
+# <NA>                             0  2189  1509  1440   899   921  1008
+
+table(panel$D13_6, panel$wave, useNA = "ifany")
+table(panel$D13_7, panel$wave, useNA = "ifany")
+
+panel$commute_7 <- panel$d13
+
+# Fill out missing commute from wave 6
+panel$commute_7[which(is.na(panel$commute_7))] <- panel$D13_6[which(is.na(panel$commute_7))]
+
+# Fill out missing commute from wave 7
+panel$commute_7[which(is.na(panel$commute_7))] <- panel$D13_7[which(is.na(panel$commute_7))]
+
+table(panel$commute_7, panel$wave, useNA = "ifany")
+#                              wave1 wave2 wave3 wave4 wave5 wave6 wave7
+# Cycle                           36     7     8     0     0     6    21
+# Drive alone                   1295    96    96     0     0   288   380
+# Drive with others or carpool   236    13    14     0     0    28    46
+# This doesn't apply to me       917    71    68     0     0   400   306
+# Transit                        486    38    36     0     0    65    97
+# Walk                           209    20    21     0     0    29    51
+# Work/study at home             134     7     8     0     0   105   107
+# <NA>                             0  2189  1509  1440   899     0     0
+  
+panel <- panel %>%
+  mutate(commute_7 = as.factor(commute_7))
+
+# Create dichotomous variable indicator whether respondents drive to work
+drive_yes <- c("Drive alone",
+               "Drive with others or carpool")
+
+drive_no <- c("Cycle",
+              "This doesn't apply to me",
+              "Transit",
+              "Walk",
+              "Work/study at home")
+
+panel <- panel %>%
+  mutate(drive = case_when(commute_7 %in% drive_yes ~ 1,
+                           commute_7 %in% drive_no ~ 0)) %>%
+  mutate(drive = as.factor(drive))
+summary(panel$drive)
+#    0    1 NA's 
+# 3253 2492 6037 
+rm(drive_yes, drive_no)
+
+
+# .. Yearly kilometers driven ####
+# Look for variables with responses on kilometers driven
+names(panel)[str_detect(colnames(panel), fixed("c10", ignore_case = TRUE))]
+# Relevant variable is C10B_6
+panel %>%
+  filter(!is.na(C10B_6)) %>%
+  select(wave) %>%
+  summary
+# Wave 6
+
+names(panel)[str_detect(colnames(panel), fixed("km", ignore_case = TRUE))]
+# [1] "KM_7_1" "KM_7_2"
+
+# Relevant variable is KM_7_2 because the condition for asking the
+# question is not dependent on just owning 1 vehicle (like KM_7_1)
+# KM_7_2: First, think about the vehicle that your household drives the most 
+# on an annual basis. About how many kilometers total did 
+# your household drive this vehicle over the past year?
+# Condition: D8_7.but(D8_7.r0 or D8_7.r1).any
+
+# Check that KM_7_2 is the more complete variable
+panel %>% filter(!is.na(KM_7_1)) %>% count
+# 430
+panel %>% filter(!is.na(KM_7_2)) %>% count
+# 469
+
+panel %>% select(KM_7_2) %>% pull %>% factor %>% levels
+# The following levels are missing
+# "65,000 km", "85,000 km", "100,000 km"
+
+panel$km_driven_num <- NA
+panel$km_driven_23 <- NA
+
+# Fill in data from wave 6
+panel$km_driven_num[which(is.na(panel$km_driven_num))] <- panel$C10B_6[which(is.na(panel$km_driven_num))]
+panel <- panel %>%
+  mutate(km_driven_num = as.numeric(km_driven_num))
+
+# Fill in data from wave 7
+panel$km_driven_23[which(is.na(panel$km_driven_23))] <- panel$KM_7_2[which(is.na(panel$km_driven_23))]
+panel <- panel %>%
+  mutate(km_driven_23 = as.factor(km_driven_23))
+
+# Add missing levels for consistency (they won't have any obs)
+levels(panel$km_driven_23) <- c(levels(panel$km_driven_23),
+                                "65,000 km",
+                                "85,000 km",
+                                "100,000 km")
+levels(panel$km_driven_23)
+# [1] "0 km"         "10,000 km"    "100,000 + km" "15,000 km"   
+# [5] "20,000 km"    "25,000 km"    "30,000 km"    "35,000 km"   
+# [9] "40,000 km"    "45,000 km"    "5,000 km"     "50,000 km"   
+# [13] "55,000 km"    "60,000 km"    "70,000 km"    "75,000 km"   
+# [17] "80,000 km"    "90,000 km"    "95,000 km"    "Not sure"    
+# [21] "65,000 km"    "85,000 km"    "100,000 km" 
+
+# Convert to numeric variable
+panel$km_driven_num[which(panel$wave == "wave7")] <- stri_replace_all_regex(panel$km_driven_23[which(panel$wave == "wave7")],
+                                                                            pattern = c(" km", " +", ",", "Notsure"),
+                                                                            replacement = c("", "", "", ""),
+                                                                            vectorize = FALSE)
+table(panel$km_driven_num, panel$wave, useNA = "ifany")
+panel <- panel %>%
+  mutate(km_driven_num = as.numeric(km_driven_num))
+
+ggplot(data = panel) +
+  geom_histogram(aes(x = km_driven_num))
+# 2 observations of 500000
+
+# Collapse some of the factors of the categorical variables
+summary(panel$km_driven_23)
+panel <- panel %>%
+  mutate(km_driven_11 = fct_collapse(km_driven_23,
+                                     "0 to 9,9999 km" = c("0 km", "5,000 km"),
+                                     "10,000 to 19,000 km" = c("10,000 km", "15,000 km"),
+                                     "20,000 to 29,000 km" = c("20,000 km", "25,000 km"),
+                                     "30,000 to 39,000 km" = c("30,000 km", "35,000 km"),
+                                     "40,000 to 49,000 km" = c("40,000 km", "45,000 km"),
+                                     "50,000 to 59,000 km" = c("50,000 km", "55,000 km"),
+                                     "60,000 to 60,000 km" = c("60,000 km", "65,000 km"),
+                                     "70,000 to 79,000 km" = c("70,000 km", "75,000 km"),
+                                     "80,000 to 89,000 km" = c("80,000 km", "85,000 km"),
+                                     "90,000 to 99,000 km" = c("90,000 km", "95,000 km"),
+                                     "100,000 km or more" = c("100,000 km", "100,000 + km")))
+summary(panel$km_driven_11)
 
 
 
@@ -1494,7 +1743,6 @@ panel <- panel %>%
   mutate(inc_heat_perceived_num = as.numeric(inc_heat_perceived_num))
 
 ggplot(data = panel %>%
-         select(wave, inc_heat_perceived_num) %>%
          filter(wave == "wave6" | wave == "wave7"),
        aes(x = inc_heat_perceived_num,
            fill = wave)) +
@@ -1507,7 +1755,6 @@ outlier.obs <- outlier.test$all.stats[which(outlier.test$all.stats$Outlier == TR
 panel$inc_heat_perceived_num[outlier.obs] <- NA
 
 ggplot(data = panel %>%
-         select(wave, inc_heat_perceived_num) %>%
          filter(wave == "wave6" | wave == "wave7"),
        aes(x = inc_heat_perceived_num,
            fill = wave)) +
@@ -1577,7 +1824,6 @@ panel <- panel %>%
   mutate(inc_gas_perceived_num = as.numeric(inc_gas_perceived_num))
 
 ggplot(data = panel %>%
-         select(wave, inc_gas_perceived_num) %>%
          filter(wave == "wave6" | wave == "wave7"),
        aes(x = inc_gas_perceived_num,
            fill = wave)) +
@@ -1596,7 +1842,823 @@ ggplot(data = panel %>%
            fill = wave)) +
   geom_density()
 
-rm(outlier.test, outlier.obs)
+
+# .. Perceived increase in overall costs as a result of carbon pricing ####
+# To the best of your knowledge, about how much more money (in dollars) did your 
+# household pay in the last year overall as a result of carbon pricing in your province?
+table(panel$E12_7, panel$wave, useNA = "ifany")
+# Data is for wave 7
+
+# To the best of your knowledge, about how much more money (in dollars) did your 
+# household pay in the last year overall as a result of carbon pricing in your province?
+table(panel$C12_6, panel$wave, useNA = "ifany")
+# Data is for wave 6
+
+panel$inc_overall_perceived_num <- NA
+
+# Fill in data from wave 6
+panel$inc_overall_perceived_num[which(is.na(panel$inc_overall_perceived_num))] <- panel$C12_6[which(is.na(panel$inc_overall_perceived_num))]
+
+# Fill in data from wave 7
+panel$inc_overall_perceived_num[which(is.na(panel$inc_overall_perceived_num))] <- panel$E12_7[which(is.na(panel$inc_overall_perceived_num))]
+
+unique(panel$inc_overall_perceived_num)
+panel <- panel %>%
+  mutate(inc_overall_perceived_num = as.numeric(inc_overall_perceived_num))
+
+ggplot(data = panel,
+       aes(x = inc_overall_perceived_num)) +
+  geom_histogram()
+
+# Identify and remove outliers with Rosner's test
+outlier.test <- rosnerTest(panel$inc_overall_perceived_num, k = 3)
+outlier.obs <- outlier.test$all.stats[which(outlier.test$all.stats$Outlier == TRUE), "Obs.Num"]
+panel$inc_overall_perceived_num[outlier.obs] <- NA
+
+ggplot(data = panel,
+       aes(x = inc_overall_perceived_num)) +
+  geom_histogram()
+
+
+# .. Perceived change in gas prices ####
+# Look for variables on change in gas prices
+names(panel)[str_detect(colnames(panel), fixed("e6", ignore_case = TRUE))]
+# Relevant variables are e6, E6_7, E6_JAN_7
+
+# Over the past month, would you say the price of gasoline or diesel has:
+# Gotten more expensive (1)
+# Gotten less expensive (2)
+# Stayed about the same (3)
+# Not sure (98)
+# I don’t use gasoline or diesel fuel (99)
+table(panel$e6, panel$wave, useNA = "ifany")
+# Waves 1, 2, and 3
+
+# Compared to about a month ago, would you say the price of gasoline in your area has:
+# Gotten more expensive
+# Gotten less expensive
+# Stayed about the same
+# Not sure
+# I don't use gasoline
+table(panel$E6_7, panel$wave, useNA = "ifany")
+# Wave 7
+
+# Fix naming
+panel$e6[which(panel$e6 == "I don’t use gasoline or diesel fuel")] <- "I don't use gasoline"
+panel$e6[which(panel$e6 == "I don't use gasoline or diesel fuel")] <- "I don't use gasoline"
+sort(unique(panel$e6)) == sort(unique(panel$E6_7))
+# [1] TRUE TRUE TRUE TRUE TRUE
+
+panel$gasprice_change_perceived_5 <- NA
+
+# Fill in data from waves 1, 2, and 3
+panel$gasprice_change_perceived_5[which(is.na(panel$gasprice_change_perceived_5))] <- panel$e6[which(is.na(panel$gasprice_change_perceived_5))]
+
+# Fill in data from wave 7
+panel$gasprice_change_perceived_5[which(is.na(panel$gasprice_change_perceived_5))] <- panel$E6_7[which(is.na(panel$gasprice_change_perceived_5))]
+
+panel <- panel %>%
+  mutate(gasprice_change_perceived_5 = as.factor(gasprice_change_perceived_5))
+
+table(panel$gasprice_change_perceived_5, panel$wave, useNA = "ifany")
+#                       wave1 wave2 wave3 wave4 wave5 wave6 wave7
+# Gotten less expensive   495    43   337     0     0     0    95
+# Gotten more expensive  1406  2049   881     0     0     0   770
+# I don't use gasoline    149    72    64     0     0     0    20
+# Not sure                142    58    55     0     0     0    12
+# Stayed about the same  1121   219   423     0     0     0   111
+# <NA>                      0     0     0  1440   899   920     0
+
+
+# .. Perceived increase/decrease in gas prices from previous month ####
+# Look for variables on increase/decrease in gas prices
+names(panel)[str_detect(colnames(panel), fixed("gas", ignore_case = TRUE))]
+# Relevant variables are egas_a, egas_b3, EGAS_A_month_7, EGAS_B_month_7
+
+# By about how much do you think the price of gasoline or diesel 
+# in your area has risen compared to about a month ago?
+unique(panel$egas_a)
+table(panel$egas_a, panel$wave, useNA = "ifany")
+# Data is for waves 2 and 3
+
+# By about how much do you think the price of gasoline 
+# in your area has decreased compared to last month?
+unique(panel$egas_b3)
+table(panel$egas_b3, panel$wave, useNA = "ifany")
+# Data is for wave 3
+
+# By about how much do you think the price of gasoline 
+# in your area has risen compared to last month?
+unique(panel$EGAS_A_month_7)
+table(panel$EGAS_A_month_7, panel$wave, useNA = "ifany")
+# Data is for wave 7
+
+# By about how much do you think the price of gasoline
+# in your area has decreased compared to last month?
+unique(panel$EGAS_B_month_7)
+table(panel$EGAS_B_month_7, panel$wave, useNA = "ifany")
+# Data is for wave 7
+
+# Create categorical variable for increase in gas prices over the last month
+panel$gasprice_inc_perceived_7 <- NA
+
+# Fill in data from waves 2 and 3
+panel$gasprice_inc_perceived_7[which(is.na(panel$gasprice_inc_perceived_7))] <- panel$egas_a[which(is.na(panel$gasprice_inc_perceived_7))]
+
+# Fill in data from wave 7
+panel$gasprice_inc_perceived_7[which(is.na(panel$gasprice_inc_perceived_7))] <- panel$EGAS_A_month_7[which(is.na(panel$gasprice_inc_perceived_7))]
+
+panel <- panel %>%
+  mutate(gasprice_inc_perceived_7 = as.factor(gasprice_inc_perceived_7))
+
+table(panel$gasprice_inc_perceived_7, panel$wave, useNA = "ifany")
+#                                   wave1 wave2 wave3 wave4 wave5 wave6 wave7
+# Between 10 and 15 cents per litre     0   556   152     0     0     0   167
+# Between 15 and 20 cents per litre     0   324    66     0     0     0   106
+# Between 2 and 5 cents per litre       0   258   204     0     0     0    45
+# Between 5 and 10 cents per litre      0   566   307     0     0     0   134
+# More than 20 cents per litre          0   253    63     0     0     0   256
+# Not sure                              0    70    60     0     0     0    55
+# Under 2 cents per litre               0    22    29     0     0     0     7
+# <NA>                               3313   392   879  1440   899   920   238
+
+# Create categorical variable for decrease in gas prices over the last month
+panel$gasprice_dec_perceived_7 <- NA
+
+# Fill in data from waves 3
+panel$gasprice_dec_perceived_7[which(is.na(panel$gasprice_dec_perceived_7))] <- panel$egas_b3[which(is.na(panel$gasprice_dec_perceived_7))]
+
+# Fill in data from wave 7
+panel$gasprice_dec_perceived_7[which(is.na(panel$gasprice_dec_perceived_7))] <- panel$EGAS_B_month_7[which(is.na(panel$gasprice_dec_perceived_7))]
+
+panel <- panel %>%
+  mutate(gasprice_dec_perceived_7 = as.factor(gasprice_dec_perceived_7))
+
+table(panel$gasprice_dec_perceived_7, panel$wave, useNA = "ifany")
+#                                   wave1 wave2 wave3 wave4 wave5 wave6 wave7
+# Between 10 and 15 cents per litre     0     0    79     0     0     0    17
+# Between 15 and 20 cents per litre     0     0    27     0     0     0    11
+# Between 2 and 5 cents per litre       0     0    79     0     0     0    22
+# Between 5 and 10 cents per litre      0     0   118     0     0     0    31
+# More than 20 cents per litre          0     0    10     0     0     0     7
+# Not sure                              0     0     9     0     0     0     4
+# Under 2 cents per litre               0     0    15     0     0     0     3
+# <NA>                               3313  2441  1423  1440   899   920   913
+
+# Create numeric variable of net perceived changes in gas prices in $ which takes the upper interval of each bracket
+levels(panel$gasprice_inc_perceived_7)
+levels(panel$gasprice_dec_perceived_7)
+
+panel <- panel %>%
+  mutate(gasprice_inc_perceived_num = recode_factor(gasprice_inc_perceived_7,
+                                    "Under 2 cents per litre" = 2,
+                                    "Between 2 and 5 cents per litre" = 5,
+                                    "Between 5 and 10 cents per litre" = 10,
+                                    "Between 10 and 15 cents per litre" = 15,
+                                    "Between 15 and 20 cents per litre" = 20,
+                                    "More than 20 cents per litre" = 25),
+         gasprice_dec_perceived_num = recode_factor(gasprice_dec_perceived_7,
+                                                    "Under 2 cents per litre" = -2,
+                                                    "Between 2 and 5 cents per litre" = -5,
+                                                    "Between 5 and 10 cents per litre" = -10,
+                                                    "Between 10 and 15 cents per litre" = -15,
+                                                    "Between 15 and 20 cents per litre" = -20,
+                                                    "More than 20 cents per litre" = -25)) %>%
+  mutate(gasprice_inc_perceived_num = as.numeric(as.character(gasprice_inc_perceived_num)),
+         gasprice_dec_perceived_num = as.numeric(as.character(gasprice_dec_perceived_num)))
+
+hist(panel$gasprice_inc_perceived_num)
+hist(panel$gasprice_dec_perceived_num)
+
+panel <- panel %>% 
+  rowwise() %>% 
+  mutate(gasprice_change_perceived_num = sum(c(gasprice_inc_perceived_num, 
+                                               gasprice_dec_perceived_num), 
+                                             na.rm = TRUE))
+hist(panel$gasprice_change_perceived_num)
+# Distribution looks OK
+
+
+# .. Perceived increase/decrease in gas prices since January ####
+# Look for variables on increase/decrease in gas prices since January
+names(panel)[str_detect(colnames(panel), fixed("jan", ignore_case = TRUE))]
+# [1] "E6_JAN_7"     "EGAS_A_jan_7" "EGAS_B_jan_7"
+
+# By about how much do you think the price of gasoline 
+# in your area has risen compared to January 1 of this year?
+table(panel$EGAS_A_jan_7, panel$wave, useNA = "ifany")
+# Data is for wave 7
+
+# By about how much do you think the price of gasoline 
+# in your area has decreased compared to January 1 of this year?
+table(panel$EGAS_B_jan_7, panel$wave, useNA = "ifany")
+# Data is for wave 7
+
+# Create numeric variable of net perceived changes in gas prices in $ which takes the upper interval of each bracket
+panel <- panel %>%
+  mutate(gasprice_inc_jan_perceived_num = case_when(EGAS_A_jan_7 == "Under 2 cents per litre" ~ 2,
+                                                    EGAS_A_jan_7 == "Between 2 and 5 cents per litre" ~ 5,
+                                                    EGAS_A_jan_7 == "Between 5 and 10 cents per litre" ~ 10,
+                                                    EGAS_A_jan_7 == "Between 10 and 15 cents per litre" ~ 15,
+                                                    EGAS_A_jan_7 == "Between 15 and 20 cents per litre" ~ 20,
+                                                    EGAS_A_jan_7 == "More than 20 cents per litre" ~ 25),
+         gasprice_dec_jan_perceived_num = case_when(EGAS_B_jan_7 == "Under 2 cents per litre" ~ -2,
+                                                    EGAS_B_jan_7 == "Between 2 and 5 cents per litre" ~ -5,
+                                                    EGAS_B_jan_7 == "Between 5 and 10 cents per litre" ~ -10,
+                                                    EGAS_B_jan_7 == "Between 10 and 15 cents per litre" ~ -15,
+                                                    EGAS_B_jan_7 == "Between 15 and 20 cents per litre" ~ -20,
+                                                    EGAS_B_jan_7 == "More than 20 cents per litre" ~ -25)) %>%
+  mutate(gasprice_inc_jan_perceived_num = as.numeric(as.character(gasprice_inc_jan_perceived_num)),
+         gasprice_dec_jan_perceived_num = as.numeric(as.character(gasprice_dec_jan_perceived_num)))
+
+hist(panel$gasprice_inc_jan_perceived_num)
+hist(panel$gasprice_dec_jan_perceived_num)
+
+panel <- panel %>% 
+  rowwise() %>% 
+  mutate(gasprice_change_jan_perceived_num = sum(c(gasprice_inc_jan_perceived_num, 
+                                                   gasprice_dec_jan_perceived_num), 
+                                             na.rm = TRUE))
+hist(panel$gasprice_change_jan_perceived_num)
+# Distribution is left-skewed
+# Wave 7 was fielded in hotter months
+
+
+
+## ## ## ## ## ## ## ## ## ## ##
+# ENERGY SOURCES            ####
+## ## ## ## ## ## ## ## ## ## ##
+
+# .. Main home heating source ####
+# Types of energy source
+fossil <- c("Diesel",
+            "Heating oil",
+            "Natural gas",
+            "Propane",
+            "Propane or butane")
+
+renewable <- c("Electricity",
+               "Heat pump",
+               "Solar")
+
+# Look for variables on main home heating source
+names(panel)[str_detect(colnames(panel), fixed("c2", ignore_case = TRUE))]
+# Relevant variables are C2_6, C2_7
+
+table(panel$C2_6, panel$wave, useNA = "ifany")
+table(panel$C2_7, panel$wave, useNA = "ifany")
+
+panel$heating_home_10 <- NA
+
+# Fill in data from wave 6
+panel$heating_home_10[which(is.na(panel$heating_home_10))] <- panel$C2_6[which(is.na(panel$heating_home_10))]
+
+# Fill in data from wave 7
+panel$heating_home_10[which(is.na(panel$heating_home_10))] <- panel$C2_7[which(is.na(panel$heating_home_10))]
+
+# Fix naming
+panel$heating_home_10[which(panel$heating_home_10 == "Don’t know / Prefer not to say")] <- "Don't know"
+panel$heating_home_10[which(panel$heating_home_10 == "Other. Please specify:")] <- "Other"
+
+table(panel$heating_home_10, panel$wave, useNA = "ifany")
+#             wave1 wave2 wave3 wave4 wave5 wave6 wave7
+# Diesel          0     0     0     0     0     0     3
+# Don't know      0     0     0     0     0    49    45
+# Electricity     0     0     0     0     0   370   387
+# Heat pump       0     0     0     0     0     6    21
+# Heating oil     0     0     0     0     0    18     8
+# Natural gas     0     0     0     0     0   450   498
+# Other           0     0     0     0     0     2    10
+# Propane         0     0     0     0     0    10    19
+# Solar           0     0     0     0     0     0     1
+# Wood            0     0     0     0     0    15    16
+# <NA>         3313  2441  1760  1440   899     0     0
+
+panel <- panel %>%
+  mutate(heating_home_10 = as.factor(heating_home_10))
+summary(panel$heating_home_10)
+# Diesel  Don't know Electricity   Heat pump Heating oil Natural gas 
+#      3          94         757          27          26         948 
+# Other     Propane       Solar        Wood        NA's 
+#     12          29           1          31        9853 
+
+# Create indicator variable for whether main home heating source is fossil fuels
+panel <- panel %>%
+  mutate(fossil_home = case_when(heating_home_10 %in% fossil ~ 1,
+                                 !heating_home_10 %in% fossil ~ 0)) %>%
+  mutate(fossil_home = as.factor(fossil_home))
+summary(panel$fossil_home)
+#     0     1 
+# 10775  1006 
+
+# Create indicator variable for whether main home heating source is renewable
+panel <- panel %>%
+  mutate(renewable_home = case_when(heating_home_10 %in% renewable ~ 1,
+                                    !heating_home_10 %in% renewable ~ 0)) %>%
+  mutate(renewable_home = as.factor(renewable_home))
+summary(panel$renewable_home)
+#     0     1 
+# 10996   785
+
+
+# .. Main water heating source ####
+# Look for variables on main water heating source
+names(panel)[str_detect(colnames(panel), fixed("c3", ignore_case = TRUE))]
+# Relevant variables are C3_6, C3_7
+
+table(panel$C3_6, panel$wave, useNA = "ifany")
+table(panel$C3_7, panel$wave, useNA = "ifany")
+
+panel$heating_water_9 <- NA
+
+# Fill in data from wave 6
+panel$heating_water_9[which(is.na(panel$heating_water_9))] <- panel$C3_6[which(is.na(panel$heating_water_9))]
+
+# Fill in data from wave 7
+panel$heating_water_9[which(is.na(panel$heating_water_9))] <- panel$C3_7[which(is.na(panel$heating_water_9))]
+
+# Fix naming
+panel$heating_water_9[which(panel$heating_water_9 == "Don’t know / Prefer not to say")] <- "Don't know"
+panel$heating_water_9[which(panel$heating_water_9 == "Other. Please specify:")] <- "Other"
+
+table(panel$heating_water_9, panel$wave, useNA = "ifany")
+#             wave1 wave2 wave3 wave4 wave5 wave6 wave7
+# Diesel          0     0     0     0     0     0     1
+# Don't know      0     0     0     0     0    85    90
+# Electricity     0     0     0     0     0   387   415
+# Heat pump       0     0     0     0     0    16    31
+# Heating oil     0     0     0     0     0     3     8
+# Natural gas     0     0     0     0     0   426   446
+# Other           0     0     0     0     0     2     0
+# Solar           0     0     0     0     0     0     2
+# Wood            0     0     0     0     0     1     7
+# <NA>         3313  2441  1760  1440   899     0     8
+
+panel <- panel %>%
+  mutate(heating_water_9 = as.factor(heating_water_9))
+summary(panel$heating_water_9)
+# Diesel  Don't know Electricity   Heat pump Heating oil Natural gas 
+#      1         175         802          47          11         872 
+# Other       Solar        Wood        NA's 
+#     2           2           8        9861 
+
+# Create indicator variable for whether main water heating source is fossil fuels
+panel <- panel %>%
+  mutate(fossil_water = case_when(heating_water_9 %in% fossil ~ 1,
+                                 !heating_water_9 %in% fossil ~ 0)) %>%
+  mutate(fossil_water = as.factor(fossil_water))
+summary(panel$fossil_water)
+#     0     1 
+# 10897   884 
+
+# Create indicator variable for whether main water heating source is renewable
+panel <- panel %>%
+  mutate(renewable_water = case_when(heating_water_9 %in% renewable ~ 1,
+                                     !heating_water_9 %in% renewable ~ 0)) %>%
+  mutate(renewable_water = as.factor(renewable_water))
+summary(panel$renewable_water)
+#     0     1 
+# 10930   851 
+
+
+# .. Main stove energy source ####
+# Look for variables on main stove energy source
+names(panel)[str_detect(colnames(panel), fixed("c4", ignore_case = TRUE))]
+# Relevant variables are C4_6, C4_7
+
+table(panel$C4_6, panel$wave, useNA = "ifany")
+table(panel$C4_7, panel$wave, useNA = "ifany")
+
+panel$heating_stove_5 <- NA
+
+# Fill in data from wave 6
+panel$heating_stove_5[which(is.na(panel$heating_stove_5))] <- panel$C4_6[which(is.na(panel$heating_stove_5))]
+
+# Fill in data from wave 7
+panel$heating_stove_5[which(is.na(panel$heating_stove_5))] <- panel$C4_7[which(is.na(panel$heating_stove_5))]
+
+# Fix naming
+panel$heating_stove_5[which(panel$heating_stove_5 == "Don’t know / Prefer not to say")] <- "Don't know"
+panel$heating_stove_5[which(panel$heating_stove_5 == "Other. Please specify:")] <- "Other"
+panel$heating_stove_5[which(panel$heating_stove_5 == "Wood")] <- "Other"
+
+table(panel$heating_stove_5, panel$wave, useNA = "ifany")
+#                   wave1 wave2 wave3 wave4 wave5 wave6 wave7
+# Don't know            0     0     0     0     0    14    21
+# Electricity           0     0     0     0     0   776   812
+# Natural gas           0     0     0     0     0   116   160
+# Other                 0     0     0     0     0     5     6
+# Propane or butane     0     0     0     0     0     9     9
+# <NA>               3313  2441  1760  1440   899     0     0
+
+panel <- panel %>%
+  mutate(heating_stove_5 = as.factor(heating_stove_5))
+summary(panel$heating_stove_5)
+# Don't know       Electricity       Natural gas             Other 
+#         35              1588               276                11 
+# Propane or butane              NA's 
+#                18              9853 
+
+# Create indicator variable for whether main stove energy source is fossil fuels
+panel <- panel %>%
+  mutate(fossil_stove = case_when(heating_stove_5 %in% fossil ~ 1,
+                                  !heating_stove_5 %in% fossil ~ 0)) %>%
+  mutate(fossil_stove = as.factor(fossil_stove))
+summary(panel$fossil_stove)
+#     0     1 
+# 11487   294
+
+# Create indicator variable for whether main stove energy source is renewable
+panel <- panel %>%
+  mutate(renewable_stove = case_when(heating_stove_5 %in% renewable ~ 1,
+                                     !heating_stove_5 %in% renewable ~ 0)) %>%
+  mutate(renewable_stove = as.factor(renewable_stove))
+summary(panel$renewable_stove)
+#     0     1 
+# 10193  1588 
+
+rm(fossil, renewable)
+
+
+
+## ## ## ## ## ## ## ## ## ## ##
+# ENERGY BILLS              ####
+## ## ## ## ## ## ## ## ## ## ##
+
+# .. Familiarity with household bills #####
+# Look for variable on familiarity with bills
+names(panel)[str_detect(colnames(panel), fixed("pay", ignore_case = TRUE))]
+table(panel$PAY_7, panel$wave, useNA = "ifany")
+
+panel <- panel %>%
+  mutate(familiar_bills_3 = as.factor(PAY_7))
+levels(panel$familiar_bills_3)
+
+panel$familiar_bills_3 <- recode_factor(panel$familiar_bills_3,
+                                        "I am not familiar at all with the cost of utility bills for my home." = "Not familiar",
+                                        "I am somewhat familiar with the cost of utility bills for my home." = "Somewhat familiar",
+                                        "I am very familiar with the cost of utility bills for my home." = "Very familiar")
+summary(panel$familiar_bills_3)
+# Not familiar Somewhat familiar     Very familiar              NA's 
+#          107               264               637             10773 
+
+
+# .. Monthly electricity bills #####
+# Look for variable on monthly electricity bills
+names(panel)[str_detect(colnames(panel), fixed("c5", ignore_case = TRUE))]
+# Relevant variables are C5_6, C5_7a, C5_7b
+
+unique(panel$C5_6)
+unique(panel$C5_7a)
+unique(panel$C5_7b)
+
+panel %>%
+  filter(!is.na(C5_6)) %>%
+  select(wave) %>%
+  summary
+# Wave 6
+
+panel %>%
+  filter(!is.na(C5_7a)) %>%
+  select(wave) %>%
+  summary
+# Wave 7
+
+panel %>%
+  filter(!is.na(C5_7b)) %>%
+  select(wave) %>%
+  summary
+# Wave 7
+
+panel$bill_elec_num <- NA
+panel$bill_elec_winter_8 <- NA
+panel$bill_elec_summer_8 <- NA
+
+# Fill in data from wave 6
+panel$bill_elec_num[which(is.na(panel$bill_elec_num))] <- panel$C5_6[which(is.na(panel$bill_elec_num))]
+panel <- panel %>%
+  mutate(bill_elec_num = as.numeric(bill_elec_num))
+
+# Fill in data from wave 7
+panel$bill_elec_winter_8[which(is.na(panel$bill_elec_winter_8))] <- panel$C5_7a[which(is.na(panel$bill_elec_winter_8))]
+panel$bill_elec_summer_8[which(is.na(panel$bill_elec_summer_8))] <- panel$C5_7b[which(is.na(panel$bill_elec_summer_8))]
+panel <- panel %>%
+  mutate(bill_elec_winter_8 = as.factor(bill_elec_winter_8),
+         bill_elec_summer_8 = as.factor(bill_elec_summer_8))
+levels(panel$bill_elec_winter_8)
+
+# Create numeric energy bill variable which takes the mid-point of each bill bracket
+panel <- panel %>%
+  mutate(bill_elec_winter_num_mid = case_when(bill_elec_winter_8 == "$0 to $50 dollars per month" ~ 25,
+                                              bill_elec_winter_8 == "$51 to $100 dollars per month" ~ 75,
+                                              bill_elec_winter_8 == "$101 to $200 dollars per month" ~ 150,
+                                              bill_elec_winter_8 == "$201 to $300 dollars per month" ~ 250,
+                                              bill_elec_winter_8 == "$301 to $400 dollars per month" ~ 350,
+                                              bill_elec_winter_8 == "$401 to $500 dollars per month" ~ 450,
+                                              bill_elec_winter_8 == "$500 dollars or more per month" ~ 600,
+                                              bill_elec_winter_8 == "My household does not directly pay an electricity bill." ~ 0),
+         bill_elec_summer_num_mid = case_when(bill_elec_summer_8 == "$0 to $50 dollars per month" ~ 25,
+                                              bill_elec_summer_8 == "$51 to $100 dollars per month" ~ 75,
+                                              bill_elec_summer_8 == "$101 to $200 dollars per month" ~ 150,
+                                              bill_elec_summer_8 == "$201 to $300 dollars per month" ~ 250,
+                                              bill_elec_summer_8 == "$301 to $400 dollars per month" ~ 350,
+                                              bill_elec_summer_8 == "$401 to $500 dollars per month" ~ 450,
+                                              bill_elec_summer_8 == "$500 dollars or more per month" ~ 600,
+                                              bill_elec_summer_8 == "My household does not directly pay an electricity bill." ~ 0))
+
+table(panel$bill_elec_num, panel$wave, useNA = "ifany")
+
+# Create yearly average of monthly electricity bill for wave 7
+panel$bill_elec_num[which(panel$wave == "wave7")] <- (panel$bill_elec_winter_num_mid[which(panel$wave == "wave7")] + 
+                                                        panel$bill_elec_summer_num_mid[which(panel$wave == "wave7")]) / 2
+
+ggplot(data = panel,
+       aes(x = bill_elec_num,
+           fill = wave)) +
+  geom_density()
+# Data is highly right-skewed due to outliers
+
+# Identify and remove outliers with Rosner's test
+outlier.test <- rosnerTest(panel$bill_elec_num, k = 10)
+outlier.obs <- outlier.test$all.stats[which(outlier.test$all.stats$Outlier == TRUE), "Obs.Num"]
+panel$bill_elec_num[outlier.obs] <- NA
+
+ggplot(data = panel,
+       aes(x = bill_elec_num,
+           fill = wave)) +
+  geom_density()
+
+ggplot(data = panel) +
+  geom_density(aes(x = bill_elec_winter_num_mid)) +
+  geom_density(aes(x = bill_elec_summer_num_mid))
+
+
+# .. Monthly natural gas bills #####
+# Look for variable on monthly natural gas bills
+names(panel)[str_detect(colnames(panel), fixed("c6", ignore_case = TRUE))]
+# Relevant variables are C6_6, C6_7a, C6_7b
+
+unique(panel$C6_6)
+unique(panel$C6_7a)
+unique(panel$C6_7b)
+
+panel %>%
+  filter(!is.na(C6_6)) %>%
+  select(wave) %>%
+  summary
+# Wave 6
+
+panel %>%
+  filter(!is.na(C6_7a)) %>%
+  select(wave) %>%
+  summary
+# Wave 7
+
+panel %>%
+  filter(!is.na(C6_7b)) %>%
+  select(wave) %>%
+  summary
+# Wave 7
+
+panel$bill_natgas_num <- NA
+panel$bill_natgas_winter_7 <- NA
+panel$bill_natgas_summer_7 <- NA
+
+# Fill in data from wave 6
+panel$bill_natgas_num[which(is.na(panel$bill_natgas_num))] <- panel$C6_6[which(is.na(panel$bill_natgas_num))]
+panel <- panel %>%
+  mutate(bill_natgas_num = as.numeric(bill_natgas_num))
+
+# Fill in data from wave 7
+panel$bill_natgas_winter_7[which(is.na(panel$bill_natgas_winter_7))] <- panel$C6_7a[which(is.na(panel$bill_natgas_winter_7))]
+panel$bill_natgas_summer_7[which(is.na(panel$bill_natgas_summer_7))] <- panel$C6_7b[which(is.na(panel$bill_natgas_summer_7))]
+panel <- panel %>%
+  mutate(bill_natgas_winter_7 = as.factor(bill_natgas_winter_7),
+         bill_natgas_summer_7 = as.factor(bill_natgas_summer_7))
+
+levels(panel$bill_natgas_winter_7)
+# [1] "$0 to $50 dollars per month"                           
+# [2] "$101 to $200 dollars per month"                        
+# [3] "$201 to $300 dollars per month"                        
+# [4] "$301 to $400 dollars per month"                        
+# [5] "$401 to $500 dollars per month"                        
+# [6] "$500 dollars or more per month"                        
+# [7] "$51 to $100 dollars per month"                         
+# [8] "My household does not directly pay a natural gas bill."
+levels(panel$bill_natgas_summer_7)
+# [1] "$0 to $50 dollars per month"                           
+# [2] "$101 to $200 dollars per month"                        
+# [3] "$201 to $300 dollars per month"                        
+# [4] "$301 to $400 dollars per month"                        
+# [5] "$51 to $100 dollars per month"                         
+# [6] "My household does not directly pay a natural gas bill."
+# [7] "Over $400 dollars per month" 
+
+# Collapse $400+ categories for winter because factor level is missing in summer
+panel <- panel %>%
+  mutate(bill_natgas_winter_7 = recode_factor(bill_natgas_winter_7,
+                                              "$401 to $500 dollars per month" = "Over $400 dollars per month",
+                                              "$500 dollars or more per month" = "Over $400 dollars per month"))
+levels(panel$bill_natgas_winter_7)
+# [1] "Over $400 dollars per month"                           
+# [2] "$0 to $50 dollars per month"                           
+# [3] "$101 to $200 dollars per month"                        
+# [4] "$201 to $300 dollars per month"                        
+# [5] "$301 to $400 dollars per month"                        
+# [6] "$51 to $100 dollars per month"                         
+# [7] "My household does not directly pay a natural gas bill."
+
+# Create numeric energy bill variable which takes the mid-point of each bill bracket
+panel <- panel %>%
+  mutate(bill_natgas_winter_num_mid = case_when(bill_natgas_winter_7 == "$0 to $50 dollars per month" ~ 25,
+                                                bill_natgas_winter_7 == "$51 to $100 dollars per month" ~ 75,
+                                                bill_natgas_winter_7 == "$101 to $200 dollars per month" ~ 150,
+                                                bill_natgas_winter_7 == "$201 to $300 dollars per month" ~ 250,
+                                                bill_natgas_winter_7 == "$301 to $400 dollars per month" ~ 350,
+                                                bill_natgas_winter_7 == "Over $400 dollars per month" ~ 500,
+                                                bill_natgas_winter_7 == "My household does not directly pay an electricity bill." ~ 0),
+         bill_natgas_summer_num_mid = case_when(bill_natgas_summer_7 == "$0 to $50 dollars per month" ~ 25,
+                                                bill_natgas_summer_7 == "$51 to $100 dollars per month" ~ 75,
+                                                bill_natgas_summer_7 == "$101 to $200 dollars per month" ~ 150,
+                                                bill_natgas_summer_7 == "$201 to $300 dollars per month" ~ 250,
+                                                bill_natgas_summer_7 == "$301 to $400 dollars per month" ~ 350,
+                                                bill_natgas_summer_7 == "Over $400 dollars per month" ~ 500,
+                                                bill_natgas_summer_7 == "My household does not directly pay an electricity bill." ~ 0))
+
+table(panel$bill_natgas_num, panel$wave, useNA = "ifany")
+
+# Create yearly average of monthly natural gas bill for wave 7
+panel$bill_natgas_num[which(panel$wave == "wave7")] <- (panel$bill_natgas_winter_num_mid[which(panel$wave == "wave7")] + 
+                                                        panel$bill_natgas_summer_num_mid[which(panel$wave == "wave7")]) / 2
+
+ggplot(data = panel,
+       aes(x = bill_natgas_num,
+           fill = wave)) +
+  geom_density()
+# Data is highly right-skewed due to outliers
+
+# Identify and remove outliers with Rosner's test
+outlier.test <- rosnerTest(panel$bill_natgas_num, k = 10)
+outlier.obs <- outlier.test$all.stats[which(outlier.test$all.stats$Outlier == TRUE), "Obs.Num"]
+panel$bill_natgas_num[outlier.obs] <- NA
+
+ggplot(data = panel,
+       aes(x = bill_natgas_num,
+           fill = wave)) +
+  geom_density()
+
+ggplot(data = panel) +
+  geom_density(aes(x = bill_natgas_winter_num_mid)) +
+  geom_density(aes(x = bill_natgas_summer_num_mid))
+
+
+# .. Monthly heating oil bills #####
+# Look for variable on monthly heating oil bills
+names(panel)[str_detect(colnames(panel), fixed("c7", ignore_case = TRUE))]
+# Relevant variables are C7_6, C7_7
+
+unique(panel$C7_6)
+unique(panel$C7_7)
+
+table(panel$C7_6, panel$wave, useNA = "ifany")
+# Wave 6
+table(panel$C7_7, panel$wave, useNA = "ifany")
+# Wave 7
+panel %>%
+  mutate(C7_7 = as.factor(C7_7)) %>%
+  select(C7_7) %>%
+  summary
+# C7_7      
+# $0 to $50 dollars per month                           :    3  
+# $101 to $200 dollars per month                        :    3  
+# $201 to $300 dollars per month                        :    1  
+# $51 to $100 dollars per month                         :    1  
+# My household does not directly pay a heating oil bill.:    1  
+# Over $400 dollars per month                           :    1  
+# NA's:11771
+
+# The level "$301 to $400 dollars per month" is missing
+
+panel$bill_heatingoil_num <- NA
+panel$bill_heatingoil_winter_7 <- NA
+
+# Fill in data from wave 6
+panel$bill_heatingoil_num[which(is.na(panel$bill_heatingoil_num))] <- panel$C7_6[which(is.na(panel$bill_heatingoil_num))]
+panel <- panel %>%
+  mutate(bill_heatingoil_num = as.numeric(bill_heatingoil_num))
+
+# Fill in data from wave 7
+panel$bill_heatingoil_winter_7[which(is.na(panel$bill_heatingoil_winter_7))] <- panel$C7_7[which(is.na(panel$bill_heatingoil_winter_7))]
+panel <- panel %>%
+  mutate(bill_heatingoil_winter_7 = as.factor(bill_heatingoil_winter_7))
+
+# Add missing level "$301 to $400 dollars per month" for consistency (it won't have any obs)
+levels(panel$bill_heatingoil_winter_7) <- c(levels(panel$bill_heatingoil_winter_7),
+                                            "$301 to $400 dollars per month")
+levels(panel$bill_heatingoil_winter_7)
+# [1] "$0 to $50 dollars per month"                           
+# [2] "$101 to $200 dollars per month"                        
+# [3] "$201 to $300 dollars per month"                        
+# [4] "$51 to $100 dollars per month"                         
+# [5] "My household does not directly pay a heating oil bill."
+# [6] "Over $400 dollars per month"                           
+# [7] "$301 to $400 dollars per month" 
+
+# Create numeric energy bill variable which takes the mid-point of each bill bracket
+panel <- panel %>%
+  mutate(bill_heatingoil_winter_num_mid = case_when(bill_heatingoil_winter_7 == "$0 to $50 dollars per month" ~ 25,
+                                                    bill_heatingoil_winter_7 == "$51 to $100 dollars per month" ~ 75,
+                                                    bill_heatingoil_winter_7 == "$101 to $200 dollars per month" ~ 150,
+                                                    bill_heatingoil_winter_7 == "$201 to $300 dollars per month" ~ 250,
+                                                    bill_heatingoil_winter_7 == "$301 to $400 dollars per month" ~ 350,
+                                                    bill_heatingoil_winter_7 == "Over $400 dollars per month" ~ 500,
+                                                    bill_heatingoil_winter_7 == "My household does not directly pay an electricity bill." ~ 0))
+
+ggplot(data = panel) +
+  geom_histogram(aes(x = bill_heatingoil_winter_num_mid))
+# So few observations
+
+ggplot(data = panel) +
+  geom_histogram(aes(x = bill_heatingoil_num))
+# Data is highly right-skewed due to outliers (but so few observations)
+
+# Identify and remove outliers with Rosner's test (just one obs)
+outlier.test <- rosnerTest(panel$bill_heatingoil_num, k = 1)
+outlier.obs <- outlier.test$all.stats[which(outlier.test$all.stats$Outlier == TRUE), "Obs.Num"]
+panel$bill_heatingoil_num[outlier.obs] <- NA
+
+ggplot(data = panel) +
+  geom_histogram(aes(x = bill_heatingoil_num))
+
+
+# .. Monthly diesel/gasoline bills ####
+# Look for variable on monthly diesel/gasoline bills
+names(panel)[str_detect(colnames(panel), fixed("e5", ignore_case = TRUE))]
+# Relevant variables are e5, E5_6
+
+unique(panel$e5)
+unique(panel$E5_6)
+unique(panel$E5_7)
+
+table(panel$e5, panel$wave, useNA = "ifany")
+# Wave 1
+table(panel$E5_6, panel$wave, useNA = "ifany")
+# Wave 6
+table(panel$E5_7, panel$wave, useNA = "ifany")
+# Wave 7
+
+panel$bill_diesel_13 <- NA
+panel$bill_diesel_num <- NA
+
+# Fill in data from wave 1
+panel$bill_diesel_13[which(is.na(panel$bill_diesel_13))] <- panel$e5[which(is.na(panel$bill_diesel_13))]
+panel <- panel %>%
+  mutate(bill_diesel_13 = factor(bill_diesel_13))
+
+levels(panel$bill_diesel_13)
+# [1] "$0"           "$0-$49"       "$100-$149"    "$150-$199"    "$200-$249"   
+# [6] "$250-$299"    "$300-$349"    "$350-$399"    "$400-$449"    "$450-$499"   
+# [11] "$50-$99"      "$500 or more" "I don't know"
+
+# Fill in data from wave 6
+panel$bill_diesel_num[which(is.na(panel$bill_diesel_num))] <- panel$E5_6[which(is.na(panel$bill_diesel_num))]
+
+# Fill in data from wave 7
+panel$bill_diesel_num[which(is.na(panel$bill_diesel_num))] <- panel$E5_7[which(is.na(panel$bill_diesel_num))]
+
+panel <- panel %>%
+  mutate(bill_diesel_num = as.numeric(bill_diesel_num))
+
+# Create numeric energy bill variable which takes the mid-point of each bill bracket
+panel <- panel %>%
+  mutate(bill_diesel_num_mid = case_when(bill_diesel_13 == "$0" ~ 0,
+                                         bill_diesel_13 == "$0-$49" ~ 25,
+                                         bill_diesel_13 == "$50-$99" ~ 75,
+                                         bill_diesel_13 == "$100-$149" ~ 125,
+                                         bill_diesel_13 == "$150-$199" ~ 175,
+                                         bill_diesel_13 == "$200-$249" ~ 225,
+                                         bill_diesel_13 == "$250-$299" ~ 275,
+                                         bill_diesel_13 == "$300-$349" ~ 325,
+                                         bill_diesel_13 == "$350-$399" ~ 375,
+                                         bill_diesel_13 == "$400-$449" ~ 425,
+                                         bill_diesel_13 == "$450-$499" ~ 475,
+                                         bill_diesel_13 == "$500 or more" ~ 600))
+
+ggplot(data = panel) +
+  geom_histogram(aes(x = bill_diesel_num))
+# Data is highly right-skewed due to outliers
+
+ggplot(data = panel) +
+  geom_histogram(aes(x = bill_diesel_num_mid))
+# Distribution looks OK
+
+# Identify and remove outliers with Rosner's test
+outlier.test <- rosnerTest(panel$bill_diesel_num, k = 10)
+outlier.obs <- outlier.test$all.stats[which(outlier.test$all.stats$Outlier == TRUE), "Obs.Num"]
+panel$bill_diesel_num[outlier.obs] <- NA
+
+ggplot(data = panel) +
+  geom_histogram(aes(x = bill_diesel_num))
 
 
 
@@ -1625,9 +2687,17 @@ household.vars <- c("numchildren_8",
                     "income_10",
                     "income_6",
                     "income_num_mid",
-                    "numvehicle",
                     "rural_7",
-                    "rural")
+                    "rural",
+                    "owner",
+                    "home_size_num")
+transport.vars <- c("vehicle_num",
+                    "commute_7",
+                    "drive",
+                    "homeowner_3",
+                    "km_driven_23",
+                    "km_driven_11",
+                    "km_driven_num")
 partisanship.vars <- c("left_right_num",
                        "party_9",
                        "votertype1.4",
@@ -1644,16 +2714,51 @@ perceptions.vars <- c("div_perceived_12",
                       "inc_heat_perceived_6",
                       "inc_heat_perceived_num",
                       "inc_gas_perceived_6",
-                      "inc_gas_perceived_num")
+                      "inc_gas_perceived_num",
+                      "inc_overall_perceived_num",
+                      "gasprice_change_perceived_5",
+                      "gasprice_inc_perceived_7",
+                      "gasprice_dec_perceived_7",
+                      "gasprice_change_perceived_num",
+                      "gasprice_change_jan_perceived_num")
+energy.vars <- c("heating_home_10",
+                 "fossil_home",
+                 "renewable_home",
+                 "heating_water_9",
+                 "fossil_water",
+                 "renewable_water",
+                 "heating_stove_5",
+                 "fossil_stove",
+                 "renewable_stove")
+bill.vars <- c("familiar_bills_3",
+               "bill_elec_winter_8",
+               "bill_elec_summer_8",
+               "bill_elec_winter_num_mid",
+               "bill_elec_summer_num_mid",
+               "bill_elec_num",
+               "bill_natgas_winter_7",
+               "bill_natgas_summer_7",
+               "bill_natgas_winter_num_mid",
+               "bill_natgas_summer_num_mid",
+               "bill_natgas_num",
+               "bill_heatingoil_winter_7",
+               "bill_heatingoil_winter_num_mid",
+               "bill_heatingoil_num",
+               "bill_diesel_13",
+               "bill_diesel_num_mid",
+               "bill_diesel_num")
 
 panel_vars <- panel %>% 
   select(all_of(c(id.vars,
                   treatment.vars,
                   demographic.vars,
                   household.vars,
+                  transport.vars,
                   partisanship.vars,
                   opinions.vars,
-                  perceptions.vars)))
+                  perceptions.vars,
+                  energy.vars,
+                  bill.vars)))
 
 levs <- sapply(panel_vars, levels)
 codebook <- data.frame(vars = colnames(panel_vars),
@@ -1663,7 +2768,8 @@ codebook <- data.frame(vars = colnames(panel_vars),
                        row.names = NULL)
 write.csv(codebook, file = here("Data", "codebook.csv"), row.names = FALSE)
 
-rm(levs, codebook, panel)
+rm(outlier.test, outlier.obs, levs, codebook, panel)
+rm(list = ls(pattern = "\\.vars"))
 
 
 
