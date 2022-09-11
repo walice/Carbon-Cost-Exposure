@@ -24,7 +24,6 @@
 
 library(dendextend)
 library(devtools)
-install_github("vqv/ggbiplot")
 library(here)
 library(ggbiplot)
 library(naniar)

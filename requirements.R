@@ -35,3 +35,6 @@ options(
 
 install.packages("arrow", 
                  repos = "https://packagemanager.rstudio.com/all/__linux__/focal/latest")
+
+# Install from GitHub remotes
+devtools::install_github("vqv/ggbiplot@7325e880485bea4c07465a0304c470608fffb5d9")
