@@ -9,11 +9,13 @@
 
 # Install regular packages
 install.packages(c("corrplot",
+                   "dendextend",
                    "EnvStats",
                    "foreign",
                    "gridExtra",
                    "mapproj",
                    "naniar",
+                   "regclass",
                    "showtext",
                    "sysfonts",
                    "wesanderson"), 
