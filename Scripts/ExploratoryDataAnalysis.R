@@ -216,11 +216,11 @@ miss %>%
 # 11 wave7 gasprice_change_jan_perceived_num      0      0  
 table(panel$gasprice_inc_perceived_7, panel$wave, useNA = "ifany")
 # Data in waves 2, 3, and 7
-table(panel$inc_gas_perceived_num, panel$wave, useNA = "ifany")
+table(panel$inc_heat_perceived_num, panel$wave, useNA = "ifany")
 # Data in waves 6 and 7
 table(panel$inc_overall_perceived_num, panel$wave, useNA = "ifany")
 # Data in waves 6 and 7
-table(panel$inc_heat_perceived_num, panel$wave, useNA = "ifany")
+table(panel$inc_gas_perceived_num, panel$wave, useNA = "ifany")
 # Data in waves 6 and 7
 
 miss %>%
@@ -254,11 +254,11 @@ miss %>%
 # 17 wave7 familiar_bills_3                    0      0  
 table(panel$bill_heatingoil_num, panel$wave, useNA = "ifany")
 # Data in wave 6
-table(panel$bill_diesel_num, panel$wave, useNA = "ifany")
-# Data in waves 6 and 7
 table(panel$bill_natgas_num, panel$wave, useNA = "ifany")
 # Data in wave 6
 table(panel$bill_elec_num, panel$wave, useNA = "ifany")
+# Data in waves 6 and 7
+table(panel$bill_diesel_num, panel$wave, useNA = "ifany")
 # Data in waves 6 and 7
 
 
