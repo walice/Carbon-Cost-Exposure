@@ -8,10 +8,12 @@
 ## ## ## ## ## ## ## ## ## ## ##
 
 # Install regular packages
-install.packages(c("EnvStats",
+install.packages(c("corrplot",
+                   "EnvStats",
                    "foreign",
                    "gridExtra",
                    "mapproj",
+                   "naniar",
                    "showtext",
                    "sysfonts",
                    "wesanderson"), 
