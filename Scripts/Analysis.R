@@ -11,15 +11,18 @@
 # Functions
 # Transformations
 # .. Relevel factors
-# Regressions
 # Data Imputation
 # .. Impute time-invariant variables from previous waves
 # .. Impute missing data on perceptions from wave 6
 # .. Impute missing data on bills from wave 6
 # .. Check coverage of data imputation procedure
 # Regressions
+# .. Baseline model of support for carbon pricing
 # .. Regress support for carbon pricing on perceived costs
 # .. Regress support for carbon pricing on actual costs
+# .. Add interaction terms for actual costs
+# .. Regress carbon pricing support on a model of perceived and actual costs
+# .. Compare nested models
 # PCA
 
 
@@ -30,13 +33,13 @@
 
 library(dendextend)
 library(devtools)
-library(here)
 library(ggbiplot)
 library(naniar)
 library(regclass)
 library(reshape2)
 library(stargazer)
 library(tidyverse)
+library(here) # Attach last to avoid conflicts
 
 
 
@@ -44,11 +47,11 @@ library(tidyverse)
 # CODEBOOK                  ####
 ## ## ## ## ## ## ## ## ## ## ##
 
-load(here::here("Data", "Processed", "panel_vars.Rdata"))
+load(here("Data", "Processed", "panel_vars.Rdata"))
 panel <- panel_vars
 rm(panel_vars)
 
-codebook <- read.csv(here::here("Data", "codebook.csv"))
+codebook <- read.csv(here("Data", "codebook.csv"))
 
 id.vars <- codebook %>%
   filter(group == "id.vars") %>%
@@ -121,7 +124,61 @@ panel <- panel %>%
                                 "40,000-60,000",
                                 "60,000-80,000",
                                 "80,000-100,000",
-                                "100,000 and over"))
+                                "100,000 and over"),
+         inc_heat_perceived_6 = fct_relevel(inc_heat_perceived_6,
+                                            "$0 per month",
+                                            "$1-$24 per month",
+                                            "$25-$49 per month" ,
+                                            "$50-$99 per month",
+                                            "$100 or more per month",
+                                            "I don't know"),
+         inc_gas_perceived_6 = fct_relevel(inc_gas_perceived_6,
+                                           "$0 per month",
+                                           "$1-$24 per month",
+                                           "$25-$49 per month" ,
+                                           "$50-$99 per month",
+                                           "$100 or more per month",
+                                           "I don't know"),
+         gasprice_change_perceived_5 = fct_relevel(gasprice_change_perceived_5,
+                                                   "Not sure",
+                                                   "Gotten less expensive",
+                                                   "I don't use gasoline",
+                                                   "Stayed about the same",
+                                                   "Gotten more expensive"))
+
+panel <- panel %>%
+  mutate(inc_heat_perceived_4 = case_when(inc_heat_perceived_6 == "$0 per month" |
+                                            inc_heat_perceived_6 == "I don't know" ~
+                                            "$0 per month",
+                                          inc_heat_perceived_6 == "$1-$24 per month" |
+                                            inc_heat_perceived_6 == "$25-$49 per month" ~
+                                            "$1-$50 per month",
+                                          inc_heat_perceived_6 == "$50-$99 per month" ~
+                                            "$50-$99 per month",
+                                          inc_heat_perceived_6 == "$100 or more per month" ~
+                                            "$100 or more per month"),
+         inc_gas_perceived_4 = case_when(inc_gas_perceived_6 == "$0 per month" |
+                                           inc_gas_perceived_6 == "I don't know" ~
+                                            "$0 per month",
+                                         inc_gas_perceived_6 == "$1-$24 per month" |
+                                           inc_gas_perceived_6 == "$25-$49 per month" ~
+                                            "$1-$50 per month",
+                                         inc_gas_perceived_6 == "$50-$99 per month" ~
+                                            "$50-$99 per month",
+                                         inc_gas_perceived_6 == "$100 or more per month" ~
+                                            "$100 or more per month")) %>%
+  mutate(inc_heat_perceived_4 = as.factor(inc_heat_perceived_4),
+         inc_gas_perceived_4 = as.factor(inc_gas_perceived_4)) %>%
+  mutate(inc_heat_perceived_4 = fct_relevel(inc_heat_perceived_4,
+                                            "$0 per month",
+                                            "$1-$50 per month",
+                                            "$50-$99 per month",
+                                            "$100 or more per month"),
+         inc_gas_perceived_4 = fct_relevel(inc_gas_perceived_4,
+                                           "$0 per month",
+                                           "$1-$50 per month",
+                                           "$50-$99 per month",
+                                           "$100 or more per month"))
 
 
 
@@ -637,80 +694,213 @@ rm(list = ls(pattern = "imput"))
 # REGRESSIONS               ####
 ## ## ## ## ## ## ## ## ## ## ##
 
-sample <- panel %>%
-  filter(wave == "wave7")
+sample <- panel %>% 
+  filter(responseid %in% wave7IDs)
+
+
+# .. Baseline model of support for carbon pricing ####
+fit0a <- lm(bin_to_num(cp_oppose) ~ edu_5 + income_6 + rural +
+              left_right_num + conservative, 
+            data = sample)
+summary(fit0a)
+nobs(fit0a)
+
+fit0b <- lm(bin_to_num(cp_support) ~ edu_5 + income_6 + rural +
+              left_right_num + liberal, 
+            data = sample)
+summary(fit0b)
+nobs(fit0b)
+
+stargazer(fit0a, fit0b, type = "text",
+          out = here("Results", "base.txt"))
+AIC(fit0a,
+    fit0b)
+# Choose fit0a - work with cp_oppose
 
 
 # .. Regress support for carbon pricing on perceived costs ####
-fit1 <- lm(bin_to_num(cp_oppose) ~ edu_5 + income_6 + rural + left_right_num + 
-             inc_heat_perceived_num + inc_gas_perceived_num + inc_overall_perceived_num + 
-             gasprice_change_perceived_num, 
-   data = sample)
-summary(fit1)
-nobs(fit1)
-VIF(fit1)
+fit1a <- lm(bin_to_num(cp_oppose) ~ edu_5 + income_6 + rural + 
+              left_right_num + conservative +
+              # familiar_bills_3 +
+              inc_heat_perceived_num + inc_gas_perceived_num + inc_overall_perceived_num + 
+              gasprice_change_perceived_num,
+            data = sample)
+summary(fit1a)
+nobs(fit1a)
+VIF(fit1a)
+
+fit1b <- lm(bin_to_num(cp_oppose) ~ edu_5 + income_6 + rural +
+              left_right_num + conservative +
+              # familiar_bills_3 +
+              inc_heat_perceived_6 + inc_gas_perceived_6 + inc_overall_perceived_num + 
+              gasprice_change_perceived_num,
+            data = sample)
+summary(fit1b)
+nobs(fit1b)
+VIF(fit1b)
+
+fit1c <- lm(bin_to_num(cp_oppose) ~ edu_5 + income_6 + rural +
+              left_right_num + conservative +
+              # familiar_bills_3 +
+              inc_heat_perceived_4 + inc_gas_perceived_4 + inc_overall_perceived_num + 
+              gasprice_change_perceived_num,
+            data = sample)
+summary(fit1c)
+nobs(fit1c)
+VIF(fit1c)
+
+stargazer(fit1a, fit1b, fit1c,
+          type = "text",
+          out = here("Results", "perceptions.txt"))
+AIC(fit1b,
+    fit1c)
+BIC(fit1b,
+    fit1c)
+# Choose model where inc_heat_perceived_* are inc_gas_perceived_*
+# are factors instead of numeric.
+# Choose model where factor are collapsed from 6 to 4.
+# Choose fit1c
 
 
 # .. Regress support for carbon pricing on actual costs ####
-fit2 <- lm(bin_to_num(cp_oppose) ~ edu_5 + income_6 + rural + left_right_num + 
-             home_size_num + vehicle_num + drive + km_driven_num +
-             bill_elec_num + bill_natgas_num + bill_diesel_num,
-           data = sample)
-summary(fit2)
-nobs(fit2)
-VIF(fit2)
+fit2a <- lm(bin_to_num(cp_oppose) ~ edu_5 + income_6 + rural +
+              left_right_num + conservative +
+              owner + home_size_num +
+              fossil_home + fossil_water + fossil_stove,
+            data = sample)
+summary(fit2a)
+nobs(fit2a)
+VIF(fit2a)
 
-fit3 <- lm(bin_to_num(cp_oppose) ~ edu_5 + income_6 + rural + left_right_num + 
-             home_size_num + vehicle_num + drive + km_driven_num +
-             bill_elec_num + bill_natgas_num + bill_diesel_num,
-           data = sample)
-summary(fit3)
-nobs(fit3)
-VIF(fit3)
+fit2b <- lm(bin_to_num(cp_oppose) ~ edu_5 + income_6 + rural +
+              left_right_num + conservative +
+              owner + home_size_num +
+              fossil_home + fossil_water + fossil_stove +
+              drive + vehicle_num + km_driven_num,
+            data = sample)
+summary(fit2b)
+nobs(fit2b)
 
-fit4 <- lm(bin_to_num(cp_oppose) ~ home_size_num + vehicle_num + drive + km_driven_num +
-             bill_elec_num + bill_natgas_num + bill_diesel_num,
-           data = sample)
-summary(fit4)
-nobs(fit4)
-VIF(fit4)
+fit2c <- lm(bin_to_num(cp_oppose) ~ edu_5 + income_6 + rural +
+              left_right_num + conservative +
+              # owner + home_size_num +
+              # fossil_home + fossil_water + fossil_stove +
+              drive + vehicle_num + km_driven_num +
+              bill_elec_num + bill_natgas_num + bill_diesel_num,
+            data = sample)
+summary(fit2c)
+nobs(fit2c)
 
-fit5 <- lm(bin_to_num(cp_oppose) ~ home_size_num + vehicle_num + drive + km_driven_num +
-             bill_elec_num + bill_natgas_num + bill_diesel_num +
-             drive*vehicle_num,
+fit2d <- lm(bin_to_num(cp_oppose) ~ edu_5 + income_6 + rural +
+              left_right_num + conservative +
+              owner + home_size_num +
+              fossil_home + fossil_water + fossil_stove +
+              drive + vehicle_num + km_driven_num +
+              bill_elec_num + bill_natgas_num + bill_diesel_num,
            data = sample)
-summary(fit5)
-nobs(fit5)
-VIF(fit5)
+summary(fit2d)
+nobs(fit2d)
 
-fit6 <- lm(bin_to_num(cp_oppose) ~ home_size_num + vehicle_num + drive + km_driven_num +
-             bill_elec_num + bill_natgas_num + bill_diesel_num +
-             drive*km_driven_num,
-           data = sample)
-summary(fit6)
-nobs(fit6)
-VIF(fit6)
+stargazer(fit2a, fit2b, fit2c, fit2d, 
+          type = "text",
+          out = here("Results", "actual.txt"))
+AIC(fit2b,
+    fit2c)
+# Choose fit2b but report all models in appendix
 
-fit7 <- lm(bin_to_num(cp_oppose) ~ home_size_num + vehicle_num + drive + km_driven_num +
-             bill_elec_num + bill_natgas_num + bill_diesel_num +
-             drive*km_driven_num + home_size_num*bill_elec_num,
-           data = sample)
-summary(fit7)
-nobs(fit7)
-VIF(fit7)
 
-fit8 <- lm(bin_to_num(cp_oppose) ~ home_size_num + vehicle_num + drive + km_driven_num +
-             bill_elec_num + bill_natgas_num + bill_diesel_num +
-             drive*bill_diesel_num,
-           data = sample)
-summary(fit8)
-nobs(fit8)
-VIF(fit8)
+# .. Add interaction terms for actual costs ####
+fit3a <- lm(bin_to_num(cp_oppose) ~ edu_5 + income_6 + rural +
+              left_right_num + conservative +
+              owner + home_size_num +
+              fossil_home + fossil_water + fossil_stove +
+              home_size_num * fossil_home +
+              drive + vehicle_num + km_driven_num +
+              drive * vehicle_num,
+            data = sample)
+summary(fit3a)
+nobs(fit3a)
 
-stargazer(fit1, fit2, fit3, fit4, 
+stargazer(fit2b, fit3a, 
+          type = "text",
+          out = here("Results", "actual_interactions.txt"))
+AIC(fit2b,
+    fit3a)
+# fit3a performs better
+# But only interaction between drive and km_driven_num is significant
+
+
+# .. Regress carbon pricing support on a model of perceived and actual costs ####
+# Include perceived and actual costs in the model
+fit4a <- lm(bin_to_num(cp_oppose) ~ edu_5 + income_6 + rural +
+              left_right_num + conservative +
+              inc_heat_perceived_4 + inc_gas_perceived_4 + 
+              inc_overall_perceived_num + gasprice_change_perceived_num +
+              owner + home_size_num +
+              fossil_home + fossil_water + fossil_stove +
+              home_size_num * fossil_home +
+              drive + vehicle_num + km_driven_num +
+              drive * vehicle_num,
+            data = sample)
+summary(fit4a)
+nobs(fit4a)
+
+stargazer(fit0a,
+          fit1c,
+          fit3a,
+          fit4a,
           type = "text")
-stargazer(fit5, fit6, fit7, fit8, 
-          type = "text")
+# fit4a performs better
+
+
+# .. Compare nested models ####
+# Variables used in the full model
+vars <- c("cp_oppose",
+          "edu_5",
+          "income_6",
+          "rural",
+          "left_right_num",
+          "conservative",
+          "inc_heat_perceived_4",
+          "inc_gas_perceived_4",
+          "inc_overall_perceived_num",
+          "gasprice_change_perceived_num",
+          "owner",
+          "home_size_num",
+          "fossil_home",
+          "fossil_water",
+          "fossil_stove",
+          "drive",
+          "vehicle_num",
+          "km_driven_num")
+
+# Subset data to obtain complete cases for the variables in the full model
+sample_complete <- sample %>%
+  select(all_of(vars)) %>%
+  drop_na
+
+# Perform F-test to compare nested models
+fit0a_complete <- update(fit0a, data = sample_complete)
+anova(fit0a_complete, fit4a)
+# Reject the null hypothesis that the full model fit4a can be reduced 
+# to the baseline model fit0a_complete
+
+fit1c_complete <- update(fit1c, data = sample_complete)
+anova(fit1c_complete, fit4a)
+# Reject the null hypothesis that the full model fit4a can be reduced 
+# to the perceived costs model fit1c_complete
+
+fit2b_complete <- update(fit2b, data = sample_complete)
+anova(fit2b_complete, fit4a)
+# Reject the null hypothesis that the full model fit4a can be reduced 
+# to the actual costs model fit2b_complete
+
+fit3a_complete <- update(fit3a, data = sample_complete)
+anova(fit3a_complete, fit4a)
+# Reject the null hypothesis that the full model fit4a can be reduced 
+# to the actual costs model with interactions fit3a_complete
+
+unique(wave7IDs)
 
 
 
@@ -724,11 +914,6 @@ miss <- panel %>%
 
 miss7 <- panel %>%
   filter(wave == "wave7") %>%
-  miss_var_summary() %>%
-  arrange(desc(pct_miss))
-
-miss6 <- panel %>%
-  filter(wave == "wave6") %>%
   miss_var_summary() %>%
   arrange(desc(pct_miss))
 
@@ -767,7 +952,7 @@ panel %>%
 # wave      n
 # <fct> <int>
 # 1 wave6   915
-# 2 wave7   897
+# 2 wave7   930
 
 table(panel$inc_heat_perceived_6, panel$wave, useNA = "ifany")
 # No missing, data for waves 1, 4, 6, and 7
@@ -779,13 +964,13 @@ panel %>%
   tally
 # <fct> <int>
 # 1 wave6   915
-# 2 wave7   412
+# 2 wave7   576
 
 select_features <- c(
                      "conservative",
                      "liberal",
                      "female",
-                     # "french",
+                     "french",
                      "bachelors",
                      "income_num_mid",
                      "rural",
@@ -793,14 +978,14 @@ select_features <- c(
                      # "home_size_num",
                      "vehicle_num",
                      "drive",
-                     "km_driven_num",
-                     # "left_right_num",
+                     # "km_driven_num",
+                     "left_right_num",
                      "inc_heat_perceived_num",
                      "inc_gas_perceived_num",
                      "inc_overall_perceived_num",
                      "gasprice_change_perceived_num",
                      "gasprice_change_jan_perceived_num",
-                     "fossil_home"
+                     "fossil_home",
                      # "renewable_home",
                      # "fossil_water",
                      # "renewable_water",
@@ -808,14 +993,14 @@ select_features <- c(
                      # "renewable_stove"
                      # "bill_elec_winter_num_mid",
                      # "bill_elec_summer_num_mid",
-                     # "bill_elec_num",
+                     "bill_elec_num",
                      # "bill_natgas_winter_num_mid",
                      # "bill_natgas_summer_num_mid",
-                     # "bill_natgas_num",
+                     "bill_natgas_num",
                      # "bill_heatingoil_winter_num_mid",
                      # "bill_heatingoil_num",
                      # "bill_diesel_num_mid",
-                     # "bill_diesel_num"
+                     "bill_diesel_num"
                      )
 
 select_labels <- c("cp_support",
@@ -831,25 +1016,32 @@ sample_pca <- panel %>%
 
 pca <- prcomp(sample_pca[, !names(sample_pca) %in% select_labels], 
               scale = TRUE, center = TRUE)
-
 summary(pca)
-ggbiplot(pca)
 
 ggbiplot(pca,
-         # labels = sample_pca$cp_oppose, 
          groups = sample_pca$cp_support,
          ellipse = TRUE)
 ggbiplot(pca,
-         # labels = sample_pca$cp_oppose, 
+         groups = sample_pca$cp_oppose,
+         ellipse = TRUE)
+ggbiplot(pca,
+         groups = sample_pca$cp_strongsupport,
+         ellipse = TRUE)
+ggbiplot(pca,
          groups = sample_pca$cp_strongoppose,
          ellipse = TRUE)
+ggbiplot(pca,
+         groups = sample_pca$party_9,
+         ellipse = TRUE)
+
+# Plot other PCs
 ggbiplot(pca,
          choices = c(1, 3),
-         groups = sample_pca$cp_strongoppose,
+         groups = sample_pca$cp_oppose,
          ellipse = TRUE)
 ggbiplot(pca,
-         choices = c(1, 2),
-         groups = sample_pca$party_9,
+         choices = c(3, 4),
+         groups = sample_pca$cp_oppose,
          ellipse = TRUE)
 
 # Extract loadings from PC1
@@ -863,15 +1055,14 @@ sort(abs(PC2), decreasing = T)
 # Compute Euclidean distance matrix
 dist2 <- dist(sample_pca[, !names(sample_pca) %in% select_labels], method = "euclidean")
 # Set seed for reproducibility
-set.seed(1)
+set.seed(1509)
 # Perform hierarchical clustering with complete linkage
 hclust <- hclust(dist2, method = "complete")
-
-# Plot dendogram colored by three clusters
+# Plot dendogram colored by 2 clusters
 dend1 <- as.dendrogram(hclust)
 dend1 <- color_branches(dend1, k = 2)
 dend1 <- color_labels(dend1, k = 2)
 dend1 <- set(dend1, "labels_cex", 0.5)
 dend1 <- set_labels(dend1, 
                     labels = sample_pca$cp_oppose[order.dendrogram(dend1)])
-plot(dend1, main = "Dendrogram colored by three clusters")
+plot(dend1)
