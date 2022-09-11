@@ -2689,12 +2689,12 @@ household.vars <- c("numchildren_8",
                     "income_num_mid",
                     "rural_7",
                     "rural",
+                    "homeowner_3",
                     "owner",
                     "home_size_num")
 transport.vars <- c("vehicle_num",
                     "commute_7",
                     "drive",
-                    "homeowner_3",
                     "km_driven_23",
                     "km_driven_11",
                     "km_driven_num")
@@ -2765,7 +2765,17 @@ codebook <- data.frame(vars = colnames(panel_vars),
                        class = sapply(panel_vars, class),
                        missing_obs = sapply(panel_vars, function(x) sum(is.na(x))),
                        factor_levels = sapply(levs, paste, collapse = ", "),
-                       row.names = NULL)
+                       row.names = NULL,
+                       group = c(rep("id.vars", length(id.vars)),
+                                 rep("treatment.vars", length(treatment.vars)),
+                                 rep("demographic.vars", length(demographic.vars)),
+                                 rep("household.vars", length(household.vars)),
+                                 rep("transport.vars", length(transport.vars)),
+                                 rep("partisanship.vars", length(partisanship.vars)),
+                                 rep("opinions.vars", length(opinions.vars)),
+                                 rep("perceptions.vars", length(perceptions.vars)),
+                                 rep("energy.vars", length(energy.vars)),
+                                 rep("bill.vars", length(bill.vars))))
 write.csv(codebook, file = here("Data", "codebook.csv"), row.names = FALSE)
 
 rm(outlier.test, outlier.obs, levs, codebook, panel)
