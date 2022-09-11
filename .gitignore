@@ -5,3 +5,6 @@
 .env
 .setup/
 *.ipynb_checkpoints/
+Data*
+Figures*
+Results*
