@@ -33,6 +33,8 @@
 "km_driven_num","numeric",10525,"","transport.vars"
 "left_right_num","numeric",7770,"","partisanship.vars"
 "party_9","factor",1105,"Bloc Québécois, Conservative Party, Don't know, Don't vote, Green Party, Liberal Party, NDP, Other party, People's Party","partisanship.vars"
+"conservative","factor",1105,"0, 1","partisanship.vars"
+"liberal","factor",1105,"0, 1","partisanship.vars"
 "votertype1.4","factor",7325,"Consistent Bloc, Consistent Convervatives, Consistent Greens, Consistent Liberals, Consistent NDP, Liberals to Other, Other to Liberals","partisanship.vars"
 "votertype3.4","factor",7231,"Consistent Bloc, Consistent Convervatives, Consistent Greens, Consistent Liberals, Consistent NDP, Liberals to Other, Other to Liberals","partisanship.vars"
 "votertype6.7","factor",10796,"Consistent Convervatives, Consistent Liberals, Consistent NDP, Liberals to Other, Other to Liberals","partisanship.vars"

@@ -72,6 +72,7 @@ library(readstata13)
 library(reshape2)
 library(stringi)
 library(tidyverse)
+options(warn = -1)
 
 
 
@@ -1427,6 +1428,16 @@ summary(panel$party_9)
 # Liberal Party                NDP        Other party     People's Party               NA's 
 # 2311               1613                 90                310               1105 
 
+# Create categorical variable for Conservative/Liberal
+panel <- panel %>%
+  mutate(conservative = case_when(party_9 == "Conservative Party" ~ 1,
+                                  party_9 != "Conservative Party" ~ 0),
+         liberal = case_when(party_9 == "Liberal Party" ~ 1,
+                             party_9 != "Liberal Party" ~ 0)) %>%
+  mutate(conservative = as.factor(conservative),
+         liberal = as.factor(liberal))
+table(panel$conservative, panel$liberal)
+
 
 # .. Consistency in party preference ####
 panel_wide <- panel %>%
@@ -2700,6 +2711,8 @@ transport.vars <- c("vehicle_num",
                     "km_driven_num")
 partisanship.vars <- c("left_right_num",
                        "party_9",
+                       "conservative",
+                       "liberal",
                        "votertype1.4",
                        "votertype3.4",
                        "votertype6.7",
