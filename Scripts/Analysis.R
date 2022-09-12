@@ -772,7 +772,9 @@ fit0b$AIC <- AIC(fit0b)
 attr(fit0a$AIC, "names") <- "Aikake Inf. Crit."
 attr(fit0b$AIC, "names") <- "Aikake Inf. Crit."
 
-stargazer(fit0a, fit0b, type = "latex", style = "ajps",
+stargazer(fit0a, 
+          fit0b, 
+          type = "latex", style = "ajps",
           title = "Determinants of support for or opposition to carbon pricing",
           dep.var.labels = c("Oppose", "Support"),
           covariate.labels = c("Education: High school", "Education: Some college", "Education: College", "Education: Graduate or prof. degree",
@@ -1488,7 +1490,45 @@ fit7a <- lm(inc_overall_perceived_num ~ conservative +
 summary(fit7a)
 nobs(fit7a)
 
+# With interactions
+fit7b <- lm(inc_overall_perceived_num ~ conservative +
+              income_num_mid +
+              familiar_bills_3 +
+              vehicle_num + drive + km_driven_num +
+              drive * km_driven_num +
+              rural +
+              gasprice_change_perceived_num +
+              owner + home_size_num +
+              fossil_home +
+              home_size_num * fossil_home, 
+            data = sample)
+summary(fit7b)
+nobs(fit7b)
+
+anova(fit7a, fit7b)
+# Fail to reject the null hypothesis that the model can be reduced to fit6a
+
 stargazer(fit5a, fit6a, fit7a,
           type = "text",
           out = here("Results", "perceived_overall_costs.txt"))
+
+stargazer(fit5a,
+          fit5b,
+          fit5c,
+          type = "latex", style = "ajps",
+          title = "Determinants of the perceptions of the costs of carbon pricing",
+          dep.var.labels = c("Increase in gasoline costs", "Increase in heating costs", "Increase in overall costs"),
+          covariate.labels = c("Conservative (dummy)",
+                               "Household income",
+                               "Household bills: Somewhat familiar", "Household bills: Very familiar",
+                               "Number of vehicles owned",
+                               "Drives to work",
+                               "Yearly kilometers driven",
+                               "Rural (dummy)",
+                               "Perceived increase in gas prices (cents/liter)",
+                               "Home owner (dummy)",
+                               "Home size (square ft.)",
+                               "Home heating is fossil fuels (dummy)"),
+                               # model.numbers = FALSE,
+                               keep.stat = c("n", "adj.rsq", "f"))
 
