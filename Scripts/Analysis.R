@@ -947,7 +947,7 @@ vars <- c("cp_oppose",
           )
 
 # Subset data to obtain complete cases for the variables in the model
-sample_complete <- panel %>%
+sample_complete <- sample %>%
   select(all_of(vars)) %>%
   drop_na
 
