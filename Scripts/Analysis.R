@@ -7,6 +7,7 @@
 # INDEX                     ####
 ## ## ## ## ## ## ## ## ## ## ##
 # Preamble
+# Graphical Parameters
 # Codebook
 # Functions
 # Transformations
@@ -29,6 +30,7 @@
 # .. Use the tree package
 # .. Simulate 1,000 trees to obtain most important variable
 # .. Random forest approach
+# .. Create variable importance plot
 # PCA
 # .. Select features
 # .. Estimate principal components
@@ -56,11 +58,35 @@ library(regclass)
 library(reshape2)
 library(rpart)
 library(rpart.plot)
+library(showtext)
 library(stargazer)
+library(sysfonts)
 library(tidyverse)
 library(tree)
 library(here) # Attach last to avoid conflicts
 set.seed(1509)
+
+
+
+## ## ## ## ## ## ## ## ## ## ##
+# GRAPHICAL PARAMETERS      ####
+## ## ## ## ## ## ## ## ## ## ##
+
+theme_set(theme_minimal())
+font_add_google("Montserrat", "montserrat")
+font_add_google("Lato", "lato")
+showtext_auto()
+showtext_opts(dpi = 96)
+
+theme_update(text = element_text(size = 20,
+                                 family = "montserrat"),
+             legend.spacing.x = unit("0.2", "cm"),
+             title = element_text(size = 30))
+my_theme <- theme(text = element_text(size = 20,
+                                      family = "montserrat"),
+                  legend.spacing.x = unit("0.2", "cm"),
+                  legend.spacing.y = unit("0.2", "cm"),
+                  title = element_text(size = 30))
 
 
 
@@ -720,6 +746,7 @@ save(panel, file = here("Data", "Processed", "panel_imputed.Rdata"))
 
 load(here("Data", "Processed", "panel_imputed.Rdata"))
 
+wave7IDs <- panel %>% filter(wave == "wave7") %>% pull(responseid)
 sample <- panel %>% 
   filter(responseid %in% wave7IDs)
 
@@ -738,9 +765,24 @@ summary(fit0b)
 nobs(fit0b)
 
 stargazer(fit0a, fit0b, type = "text",
-          out = here("Results", "base.txt"))
-AIC(fit0a,
-    fit0b)
+          out = here("Results", "pricing_base.txt"))
+
+fit0a$AIC <- AIC(fit0a)
+fit0b$AIC <- AIC(fit0b)
+attr(fit0a$AIC, "names") <- "Aikake Inf. Crit."
+attr(fit0b$AIC, "names") <- "Aikake Inf. Crit."
+
+stargazer(fit0a, fit0b, type = "latex", style = "ajps",
+          title = "Determinants of support for or opposition to carbon pricing",
+          dep.var.labels = c("Oppose", "Support"),
+          covariate.labels = c("Education: High school", "Education: Some college", "Education: College", "Education: Graduate or prof. degree",
+                               "Income: 20,000-40,000", "Income: 40,000-60,000", "Income: 60,000-80,000", "Income: 80,000-100,000", "Income: 100,000 and over",
+                               "Rural (dummy)",
+                               "Left-right: 0-1 (1 is far right)",
+                               "Conservative (dummy)",
+                               "Liberal (dummy)"),
+          model.numbers = FALSE,
+          keep.stat = c("n", "adj.rsq", "f", "AIC"))
 # Choose fit0a - work with cp_oppose
 
 
@@ -777,7 +819,7 @@ VIF(fit1c)
 
 stargazer(fit1a, fit1b, fit1c,
           type = "text",
-          out = here("Results", "perceptions.txt"))
+          out = here("Results", "pricing_perceived.txt"))
 AIC(fit1b,
     fit1c)
 BIC(fit1b,
@@ -829,7 +871,7 @@ nobs(fit2d)
 
 stargazer(fit2a, fit2b, fit2c, fit2d, 
           type = "text",
-          out = here("Results", "actual.txt"))
+          out = here("Results", "pricing_actual.txt"))
 AIC(fit2b,
     fit2c)
 # Choose fit2b but report all models in appendix
@@ -849,7 +891,7 @@ nobs(fit3a)
 
 stargazer(fit2b, fit3a, 
           type = "text",
-          out = here("Results", "actual_interactions.txt"))
+          out = here("Results", "pricing_actual_interactions.txt"))
 AIC(fit2b,
     fit3a)
 # fit3a performs better
@@ -875,8 +917,41 @@ stargazer(fit0a,
           fit1c,
           fit3a,
           fit4a,
-          type = "text")
+          type = "text",
+          no.space = TRUE,
+          out = here("Results", "pricing_full_model.txt"))
 # fit4a performs better
+
+stargazer(fit0a,
+          fit1c,
+          fit3a,
+          fit4a,
+          type = "latex", style = "ajps",
+          title = "Determinants of opposition to carbon pricing as a function of costs",
+          dep.var.labels = c("Opposition to carbon pricing"),
+          covariate.labels = c("Education: High school", "Education: Some college", "Education: College", "Education: Graduate",
+                               "Income: 20,000-40,000", "Income: 40,000-60,000", "Income: 60,000-80,000", "Income: 80,000-100,000", "Income: 100,000 and over",
+                               "Rural (dummy)",
+                               "Left-right: 0-1 (1 is far right)",
+                               "Conservative (dummy)",
+                               "Per. inc. heating: 1-50 per month", "Per. inc. heating: 50-99 per month", "Per. inc. heating: 100 or more per month",
+                               "Per. inc. gas: 1-50 per month", "Per. inc. gas: 50-99 per month", "Per. inc. gas: 100 or more per month",
+                               "Per. increase in overall costs (due to CP)",
+                               "Per.increase in gas prices (cents/liter)",
+                               "Home owner (dummy)",
+                               "Home size (square ft.)",
+                               "Home heating is fossil fuels (dummy)",
+                               "Water heating is fossil fuels (dummy)",
+                               "Fossil fuel stove (dummy)",
+                               "Drives to work",
+                               "Number of vehicles owned",
+                               "Yearly kilometers driven",
+                               "Home size * fossil home",
+                               "Drives to work * number of vehicles"),
+          # model.numbers = FALSE,
+          single.row = TRUE,
+          se = NULL,
+          keep.stat = c("n", "adj.rsq"))
 
 
 # .. Compare nested models ####
@@ -996,7 +1071,9 @@ cp_oppose.tree.10 <- prune.tree(cp_oppose.tree,
 draw.tree(cp_oppose.tree.10, 
           nodeinfo = TRUE,
           print.levels = TRUE,
-          cex = 0.5)
+          cex = 0.7)
+pdf(here("Figures", "classification_tree.pdf"))
+dev.off()
 
 
 # .. Simulate 1,000 trees to obtain most important variable ####
@@ -1050,13 +1127,14 @@ draw.tree(cp_oppose.tree.10,
 # .. Random forest approach ####
 # Opposition to carbon pricing
 set.seed(1509)
-rf <- randomForest(cp_oppose ~ . -cp_oppose,
+cp_oppose.rf <- randomForest(cp_oppose ~ . -cp_oppose,
                    data = sample_complete, 
                    importance = TRUE,
                    ntree = 1000)
-rf
-varImp(rf)
-varImpPlot(rf, cex = 0.7)
+cp_oppose.rf
+cp_oppose.varimp <- varImp(cp_oppose.rf)
+cp_oppose.varimp$var <- rownames(cp_oppose.varimp)
+varImpPlot(cp_oppose.rf, cex = 0.7)
 
 # Support for carbon pricing
 vars <- vars[-which(vars == "cp_oppose" | vars == "conservative")]
@@ -1067,13 +1145,47 @@ sample_complete <- sample %>%
   drop_na
 
 set.seed(1509)
-rf <- randomForest(cp_support ~ . -cp_support,
+cp_support.rf <- randomForest(cp_support ~ . -cp_support,
                    data = sample_complete, 
                    importance = TRUE,
                    ntree = 1000)
-rf
-varImp(rf)
-varImpPlot(rf, cex = 0.7)
+cp_support.rf
+cp_support.varimp <- varImp(cp_support.rf)
+cp_support.varimp$var <- rownames(cp_support.varimp)
+varImpPlot(cp_support.rf, cex = 0.7)
+
+
+# .. Create variable importance plot ####
+# Oppose
+g <- ggplot(cp_oppose.varimp %>%
+              select(var, Oppose),
+            aes(x = fct_reorder(var, Oppose), y = Oppose)) +
+  geom_segment(aes(xend = var, y = 0, yend = Oppose), color = "#00B0F6") +
+  geom_point(size = 4, color = "#00B0F6") +
+  theme(axis.text = element_text(size = 20)) +
+  coord_flip() +
+  labs(title = "Variable importance",
+       subtitle = "Predicting opposition to carbon pricing",
+       x = "", y = "Mean decrease in accuracy")
+ggsave(g,
+       file = here("Figures", "varimp_oppose.png"),
+       width = 6, height = 5, units = "in")
+
+# Support
+g <- ggplot(cp_support.varimp %>%
+         rename(Oppose = 1) %>%
+         select(var, Oppose),
+       aes(x = fct_reorder(var, Oppose), y = Oppose)) +
+  geom_segment(aes(xend = var, y = 0, yend = Oppose), color = "#FFD84D") +
+  geom_point(size = 4, color = "#FFD84D") +
+  theme(axis.text = element_text(size = 20)) +
+  coord_flip() +
+  labs(title = "Variable importance",
+       subtitle = "Predicting support for carbon pricing",
+       x = "", y = "Mean decrease in accuracy")
+ggsave(g,
+       file = here("Figures", "varimp_support.png"),
+       width = 6, height = 5, units = "in")
 
 
 
@@ -1204,14 +1316,38 @@ sort(abs(PC2), decreasing = T)
 
 
 # .. Biplots ####
-ggbiplot(pca,
+g <- ggbiplot(pca,
          groups = sample_pca$cp_support,
          ellipse = TRUE,
-         alpha = 0.5)
-ggbiplot(pca,
+         alpha = 0.5,
+         varname.size = 8) +
+  scale_color_manual(name = "Carbon pricing",
+                     labels = c("Oppose",
+                                "Support"),
+                     values = c("#00B0F6", "#FFD84D")) +
+  labs(title = "Principal components of support for carbon pricing") +
+  theme(legend.text = element_text(size = 20))
+g
+ggsave(g,
+       file = here("Figures", "biplot_support_12.png"),
+       width = 6, height = 4, units = "in")
+
+g <- ggbiplot(pca,
          groups = sample_pca$cp_oppose,
          ellipse = TRUE,
-         alpha = 0.5)
+         alpha = 0.5,
+         varname.size = 8) +
+  scale_color_manual(name = "Carbon pricing",
+                     labels = c("Support",
+                                "Oppose"),
+                     values = c("#FFD84D", "#00B0F6")) +
+  labs(title = "Principal components of opposition to carbon pricing") +
+  theme(legend.text = element_text(size = 20))
+g
+ggsave(g,
+       file = here("Figures", "biplot_oppose_12.png"),
+       width = 6, height = 4, units = "in")
+
 ggbiplot(pca,
          groups = sample_pca$cp_strongsupport,
          ellipse = TRUE,
@@ -1354,4 +1490,5 @@ nobs(fit7a)
 
 stargazer(fit5a, fit6a, fit7a,
           type = "text",
-          out = here("Results", "perceived_all_costs.txt"))
+          out = here("Results", "perceived_overall_costs.txt"))
+
