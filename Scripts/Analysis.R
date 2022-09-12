@@ -23,12 +23,21 @@
 # .. Add interaction terms for actual costs
 # .. Regress carbon pricing support on a model of perceived and actual costs
 # .. Compare nested models
-# Classifcation Tree
+# Classification Tree
 # .. Prep the data
 # .. Randomly split data into training and test sets
 # .. Use the tree package
 # .. Simulate 1,000 trees to obtain most important variable
+# .. Random forest approach
 # PCA
+# .. Select features
+# .. Estimate principal components
+# .. Biplots
+# .. Hierarchical clustering
+# Cost Perceptions
+# .. Model perceptions of carbon pricing on gasoline costs
+# .. Model perceptions of carbon pricing on heating costs
+# .. Model perceptions of carbon pricing on overall costs
 
 
 
@@ -42,7 +51,7 @@ library(devtools)
 library(ggbiplot)
 library(maptree)
 library(naniar)
-library(rattle)
+# library(rattle)
 library(regclass)
 library(reshape2)
 library(rpart)
@@ -701,7 +710,7 @@ ggplot(data = imput %>%
 rm(list = ls(pattern = "imput"))
 rm(list = ls(pattern = "miss"))
 
-# save(panel, file = here("Data", "Processed", "panel_imputed.Rdata"))
+save(panel, file = here("Data", "Processed", "panel_imputed.Rdata"))
 
 
 
@@ -924,7 +933,8 @@ anova(fit3a_complete, fit4a)
 ## ## ## ## ## ## ## ## ## ## ##
 
 # .. Prep the data ####
-vars <- c("cp_oppose",
+vars <- c(
+          "cp_oppose",
           "bachelors",
           "income_num_mid",
           "rural",
@@ -995,9 +1005,9 @@ nsims <- 1000
 records <- matrix(NA, ncol = 6, nrow = nsims)
 colnames(records) <- c("simulation", "variable", 
                        "2nd var", "misclass", "used", "size")
-indices <- matrix(NA, ncol = nsims, nrow = 176)
+indices <- matrix(NA, ncol = nsims, nrow = nrow(sample.test))
 
-set.seed(1)
+set.seed(1509)
 i <- 1
 for (i in 1:nsims){
   test.indices <- sample(1:nrow(sample_complete), round(nrow(sample_complete)*0.2))
@@ -1037,12 +1047,41 @@ draw.tree(cp_oppose.tree.10,
           print.levels = TRUE,
           cex = 0.5)
 
+# .. Random forest approach ####
+# Opposition to carbon pricing
+set.seed(1509)
+rf <- randomForest(cp_oppose ~ . -cp_oppose,
+                   data = sample_complete, 
+                   importance = TRUE,
+                   ntree = 1000)
+rf
+varImp(rf)
+varImpPlot(rf, cex = 0.7)
+
+# Support for carbon pricing
+vars <- vars[-which(vars == "cp_oppose" | vars == "conservative")]
+vars <- c(vars, c("cp_support", "liberal"))
+
+sample_complete <- sample %>%
+  select(all_of(vars)) %>%
+  drop_na
+
+set.seed(1509)
+rf <- randomForest(cp_support ~ . -cp_support,
+                   data = sample_complete, 
+                   importance = TRUE,
+                   ntree = 1000)
+rf
+varImp(rf)
+varImpPlot(rf, cex = 0.7)
+
 
 
 ## ## ## ## ## ## ## ## ## ## ##
 # PCA                       ####
 ## ## ## ## ## ## ## ## ## ## ##
 
+# .. Select features ####
 miss <- panel %>%
   miss_var_summary() %>%
   arrange(desc(pct_miss))
@@ -1149,51 +1188,64 @@ sample_pca <- panel %>%
   mutate_at(vars(c(select_features)), ~bin_to_num(.)) %>%
   drop_na()
 
+
+# .. Estimate principal components ####
 pca <- prcomp(sample_pca[, !names(sample_pca) %in% select_labels], 
               scale = TRUE, center = TRUE)
 summary(pca)
 
+# Extract loadings from PC1
+PC1 <- pca$rotation[, 1]
+sort(abs(PC1), decreasing = T)
+
+# Extract loadings from PC2
+PC2 <- pca$rotation[, 2]
+sort(abs(PC2), decreasing = T)
+
+
+# .. Biplots ####
 ggbiplot(pca,
          groups = sample_pca$cp_support,
-         ellipse = TRUE)
+         ellipse = TRUE,
+         alpha = 0.5)
 ggbiplot(pca,
          groups = sample_pca$cp_oppose,
          ellipse = TRUE,
          alpha = 0.5)
 ggbiplot(pca,
          groups = sample_pca$cp_strongsupport,
-         ellipse = TRUE)
+         ellipse = TRUE,
+         alpha = 0.5)
 ggbiplot(pca,
          groups = sample_pca$cp_strongoppose,
-         ellipse = TRUE)
+         ellipse = TRUE,
+         alpha = 0.5)
 ggbiplot(pca,
          groups = sample_pca$party_9,
-         ellipse = TRUE)
+         ellipse = TRUE,
+         alpha = 0.5)
 
 # Plot other PCs
 ggbiplot(pca,
          choices = c(1, 3),
          groups = sample_pca$cp_oppose,
-         ellipse = TRUE)
+         ellipse = TRUE,
+         alpha = 0.5)
 ggbiplot(pca,
          choices = c(3, 4),
          groups = sample_pca$cp_oppose,
-         ellipse = TRUE)
+         ellipse = TRUE,
+         alpha = 0.5)
 
-# Extract loadings from PC1
-PC1 <- pca$rotation[,1]
-sort(abs(PC1), decreasing = T)
 
-# Extract loadings from PC2
-PC2 <- pca$rotation[,2]
-sort(abs(PC2), decreasing = T)
-
+# .. Hierarchical clustering ####
 # Compute Euclidean distance matrix
 dist2 <- dist(sample_pca[, !names(sample_pca) %in% select_labels], method = "euclidean")
-# Set seed for reproducibility
-set.seed(1509)
+
 # Perform hierarchical clustering with complete linkage
+set.seed(1509)
 hclust <- hclust(dist2, method = "complete")
+
 # Plot dendogram colored by 2 clusters
 dend1 <- as.dendrogram(hclust)
 dend1 <- color_branches(dend1, k = 2)
@@ -1202,3 +1254,104 @@ dend1 <- set(dend1, "labels_cex", 0.5)
 dend1 <- set_labels(dend1, 
                     labels = sample_pca$cp_oppose[order.dendrogram(dend1)])
 plot(dend1)
+
+
+
+## ## ## ## ## ## ## ## ## ## ##
+# COSTS PERCEPTIONS         ####
+## ## ## ## ## ## ## ## ## ## ##
+
+sample <- panel %>% 
+  filter(responseid %in% wave7IDs)
+
+
+# .. Model perceptions of carbon pricing on gasoline costs ####
+fit5a <- lm(inc_gas_perceived_num ~ conservative + 
+              income_num_mid +
+              familiar_bills_3 +
+              vehicle_num + drive + km_driven_num +
+              rural +
+              gasprice_change_perceived_num, 
+            data = sample)
+summary(fit5a)
+nobs(fit5a)
+
+# With interactions
+fit5b <- lm(inc_gas_perceived_num ~ conservative + 
+              income_num_mid +
+              familiar_bills_3 +
+              vehicle_num + drive + km_driven_num +
+              drive * km_driven_num +
+              rural +
+              gasprice_change_perceived_num, 
+            data = sample)
+summary(fit5b)
+nobs(fit5b)
+
+fit5c <- lm(inc_gas_perceived_num ~ conservative + 
+              income_num_mid +
+              familiar_bills_3 +
+              vehicle_num + drive + km_driven_num +
+              rural +
+              gasprice_change_perceived_num +
+              gasprice_change_perceived_num * conservative, 
+            data = sample)
+summary(fit5c)
+nobs(fit5c)
+
+stargazer(fit5a, fit5b, fit5c, 
+          type = "text",
+          out = here("Results", "perceived_gas_costs.txt"))
+AIC(fit5a, fit5b, fit5c)
+# fit5a is marginally better
+anova(fit5a, fit5b)
+anova(fit5a, fit5c)
+# Fail to reject the null hypotheses that the models can be reduced to fit5a
+
+
+# .. Model perceptions of carbon pricing on heating costs ####
+fit6a <- lm(inc_heat_perceived_num ~ conservative + 
+              income_num_mid +
+              familiar_bills_3 +
+              owner + home_size_num +
+              fossil_home, 
+            data = sample)
+summary(fit6a)
+nobs(fit6a)
+
+# With interactions
+fit6b <- lm(inc_heat_perceived_num ~ conservative + 
+              income_num_mid +
+              familiar_bills_3 +
+              owner + home_size_num +
+              fossil_home +
+              home_size_num * fossil_home, 
+            data = sample)
+summary(fit6b)
+nobs(fit6b)
+
+stargazer(fit6a, fit6b, 
+          type = "text",
+          out = here("Results", "perceived_heating_costs.txt"))
+AIC(fit6a, fit6b)
+# fit6a is marginally better
+anova(fit6a, fit6b)
+# Fail to reject the null hypothesis that the full model can be reduced to fit6a
+
+
+# .. Model perceptions of carbon pricing on overall costs ####
+fit7a <- lm(inc_overall_perceived_num ~ conservative +
+              income_num_mid +
+              familiar_bills_3 +
+              vehicle_num + drive + km_driven_num +
+              rural +
+              gasprice_change_perceived_num +
+              owner + home_size_num +
+              fossil_home, 
+            data = sample)
+summary(fit7a)
+nobs(fit7a)
+
+stargazer(fit5a, fit6a, fit7a,
+          type = "text",
+          out = here("Results", "perceived_all_costs.txt"))
