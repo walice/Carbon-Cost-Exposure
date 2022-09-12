@@ -23,6 +23,13 @@
 # .. Add interaction terms for actual costs
 # .. Regress carbon pricing support on a model of perceived and actual costs
 # .. Compare nested models
+# Classifcation Tree
+# .. Prep the data
+# .. Randomly split data into training and test sets
+# .. Use the tree package
+# .. Use the rpart package
+# .. Use the caret package
+# .. Data manip
 # PCA
 
 
@@ -31,15 +38,22 @@
 # PREAMBLE                  ####
 ## ## ## ## ## ## ## ## ## ## ##
 
+library(caret)
 library(dendextend)
 library(devtools)
 library(ggbiplot)
+library(maptree)
 library(naniar)
+library(rattle)
 library(regclass)
 library(reshape2)
+library(rpart)
+library(rpart.plot)
 library(stargazer)
 library(tidyverse)
+library(tree)
 library(here) # Attach last to avoid conflicts
+set.seed(1509)
 
 
 
@@ -687,12 +701,17 @@ ggplot(data = imput %>%
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 rm(list = ls(pattern = "imput"))
+rm(list = ls(pattern = "miss"))
+
+# save(panel, file = here("Data", "Processed", "panel_imputed.Rdata"))
 
 
 
 ## ## ## ## ## ## ## ## ## ## ##
 # REGRESSIONS               ####
 ## ## ## ## ## ## ## ## ## ## ##
+
+load(here("Data", "Processed", "panel_imputed.Rdata"))
 
 sample <- panel %>% 
   filter(responseid %in% wave7IDs)
@@ -900,7 +919,163 @@ anova(fit3a_complete, fit4a)
 # Reject the null hypothesis that the full model fit4a can be reduced 
 # to the actual costs model with interactions fit3a_complete
 
-unique(wave7IDs)
+
+
+## ## ## ## ## ## ## ## ## ## ##
+# CLASSIFICATION TREE       ####
+## ## ## ## ## ## ## ## ## ## ##
+
+# .. Prep the data ####
+vars <- c("cp_oppose",
+          "bachelors",
+          "income_num_mid",
+          "rural",
+          # "left_right_num",
+          "conservative",
+          # "inc_heat_perceived_num",
+          # "inc_gas_perceived_num",
+          "inc_overall_perceived_num",
+          "gasprice_change_perceived_num",
+          "owner",
+          # "home_size_num",
+          "fossil_home",
+          "fossil_water",
+          "fossil_stove",
+          "drive",
+          "vehicle_num"
+          # "km_driven_num"
+          )
+
+# Subset data to obtain complete cases for the variables in the model
+sample_complete <- panel %>%
+  select(all_of(vars)) %>%
+  drop_na
+
+
+# .. Randomly split data into training and test sets ####
+set.seed(1509)
+test.indices <- sample(1:nrow(sample_complete), round(nrow(sample_complete)*0.2))
+sample.train <- sample_complete[-test.indices, ]
+sample.test <- sample_complete[test.indices, ]
+
+
+# .. Use the tree package ####
+# Set tree controls
+tree.opts <- tree.control(nrow(sample.train), 
+                          minsize = 5, 
+                          mindev = 1e-5)
+
+# Grow the tree
+set.seed(1509)
+cp_oppose.tree <- tree(cp_oppose ~ . -cp_oppose,
+                       data = sample.train, 
+                       control = tree.opts)
+
+# Perform cost-complexity pruning
+cp_oppose.tree.10 <- prune.tree(cp_oppose.tree, 
+                                best = 10)
+
+# Draw tree with tree package
+draw.tree(cp_oppose.tree.10, 
+          nodeinfo = TRUE,
+          print.levels = TRUE,
+          cex = 0.5)
+text(cp_oppose.tree.10,
+     pretty = 0,
+     splits = TRUE)
+
+# Draw tree using base plot
+plot(cp_oppose.tree.10)
+text(cp_oppose.tree.10)
+
+
+# .. Use the rpart package ####
+# Set tree controls
+tree.opts <- rpart.control(minsplit = 30,
+                           cp = 0,
+                           maxdepth = 10)
+
+# Grow the tree
+set.seed(1509)
+cp_oppose.tree <- rpart(cp_oppose ~ . -cp_oppose, 
+                        data = sample.train,
+                        method = "class",
+                        control = tree.opts)
+
+# Plot complexity parameter vs. error
+plotcp(cp_oppose.tree)
+
+# Choose complexity parameter that minimizes error
+min_cp <- cp_oppose.tree$cptable[which.min(cp_oppose.tree$cptable[, "xerror"]), "CP"]
+min_cp
+cp_oppose.tree.prune <- prune(cp_oppose.tree, 
+                              cp = min_cp)
+
+# Draw tree with rpart package
+rpart.plot(cp_oppose.tree.prune)
+
+# Draw tree with prp
+prp(cp_oppose.tree.prune, type = 4)
+
+# Draw tree using fancyRpartPlot
+fancyRpartPlot(cp_oppose.tree.prune,
+               type = 4,
+               palettes = "YlOrBr")
+# Labels look better here
+
+# Draw tree with tree package
+draw.tree(cp_oppose.tree.prune, 
+          nodeinfo = TRUE,
+          print.levels = TRUE,
+          cex = 0.5)
+
+# Draw tree using base plot
+plot(cp_oppose.tree.prune)
+text(cp_oppose.tree.prune)
+
+
+# .. Use the caret package ####
+# Grow the tree
+set.seed(1509)
+cp_oppose.tree = train(cp_oppose ~ . -cp_oppose,
+                       data = sample.train, 
+                       method = "rpart",
+                       trControl = trainControl(method = "cv"))
+
+# Draw tree using fancyRpartPlot
+fancyRpartPlot(cp_oppose.tree$finalModel,
+               type = 4,
+               palettes = "YlOrBr")
+
+# Draw tree with tree package
+draw.tree(cp_oppose.tree$finalModel, 
+          nodeinfo = TRUE,
+          print.levels = TRUE,
+          cex = 0.5)
+
+# Draw tree using base plot
+plot(cp_oppose.tree$finalModel)
+text(cp_oppose.tree$finalModel)
+
+# Draw tree with rpart package
+rpart.plot(cp_oppose.tree$finalModel)
+
+
+# .. Data manip ####
+sample_complete <- sample_complete %>%
+  mutate_at(vars(cp_oppose, bachelors, rural, conservative,
+                 owner, fossil_home, fossil_water, fossil_stove,
+                 drive),
+            ~bin_to_num(.)) %>%
+  mutate_at(vars(income_6, inc_heat_perceived_4, inc_gas_perceived_4),
+            ~as.character(.))
+
+levels(sample_complete$cp_oppose) <- c("Support", "Oppose")
+levels(sample_complete$conservative) <- c("No", "Yes")
+levels(sample_complete$rural) <- c("No", "Yes")
+levels(sample_complete$bachelors) <- c("No", "Yes")
+levels(sample_complete$fossil_home) <- c("No", "Yes")
+levels(sample_complete$owner) <- c("No", "Yes")
 
 
 
