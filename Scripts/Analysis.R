@@ -27,9 +27,7 @@
 # .. Prep the data
 # .. Randomly split data into training and test sets
 # .. Use the tree package
-# .. Use the rpart package
-# .. Use the caret package
-# .. Data manip
+# .. Simulate 1,000 trees to obtain most important variable
 # PCA
 
 
@@ -933,7 +931,7 @@ vars <- c("cp_oppose",
           # "left_right_num",
           "conservative",
           # "inc_heat_perceived_num",
-          # "inc_gas_perceived_num",
+          "inc_gas_perceived_num",
           "inc_overall_perceived_num",
           "gasprice_change_perceived_num",
           "owner",
@@ -950,6 +948,15 @@ vars <- c("cp_oppose",
 sample_complete <- sample %>%
   select(all_of(vars)) %>%
   drop_na
+
+# Data manip
+sample_complete <- sample_complete %>%
+  mutate_at(vars(bachelors, rural, conservative,
+                 owner, fossil_home, fossil_water, fossil_stove,
+                 drive),
+            ~bin_to_num(.))
+
+levels(sample_complete$cp_oppose) <- c("Support", "Oppose")
 
 
 # .. Randomly split data into training and test sets ####
@@ -980,102 +987,55 @@ draw.tree(cp_oppose.tree.10,
           nodeinfo = TRUE,
           print.levels = TRUE,
           cex = 0.5)
-text(cp_oppose.tree.10,
-     pretty = 0,
-     splits = TRUE)
-
-# Draw tree using base plot
-plot(cp_oppose.tree.10)
-text(cp_oppose.tree.10)
 
 
-# .. Use the rpart package ####
-# Set tree controls
-tree.opts <- rpart.control(minsplit = 30,
-                           cp = 0,
-                           maxdepth = 10)
+# .. Simulate 1,000 trees to obtain most important variable ####
+# Set up records to collect top variable
+nsims <- 1000
+records <- matrix(NA, ncol = 6, nrow = nsims)
+colnames(records) <- c("simulation", "variable", 
+                       "2nd var", "misclass", "used", "size")
+indices <- matrix(NA, ncol = nsims, nrow = 176)
 
-# Grow the tree
-set.seed(1509)
-cp_oppose.tree <- rpart(cp_oppose ~ . -cp_oppose, 
-                        data = sample.train,
-                        method = "class",
-                        control = tree.opts)
+set.seed(1)
+i <- 1
+for (i in 1:nsims){
+  test.indices <- sample(1:nrow(sample_complete), round(nrow(sample_complete)*0.2))
+  sample.train <- sample_complete[-test.indices, ]
+  sample.test <- sample_complete[test.indices, ]
+  indices[, i] <- test.indices
+  
+  tree <- NULL
+  tree <- tree(cp_oppose ~ . -cp_oppose,
+               data = sample.train, 
+               control = tree.opts)
+  tree.10 <- prune.tree(tree, 
+                        best = 10)
+  records[i, 1] <- i
+  records[i, 2] <- as.character(tree.10$frame[1, "var"])
+  records[i, 3] <- as.character(tree.10$frame[4, "var"])
+  records[i, 4] <- summary(tree.10)$misclass[1] / summary(tree.10)$misclass[2]
+  records[i, 5] <- length(summary(tree.10)$used)
+  records[i, 6] <- summary(tree.10)$size
+}
 
-# Plot complexity parameter vs. error
-plotcp(cp_oppose.tree)
-
-# Choose complexity parameter that minimizes error
-min_cp <- cp_oppose.tree$cptable[which.min(cp_oppose.tree$cptable[, "xerror"]), "CP"]
-min_cp
-cp_oppose.tree.prune <- prune(cp_oppose.tree, 
-                              cp = min_cp)
-
-# Draw tree with rpart package
-rpart.plot(cp_oppose.tree.prune)
-
-# Draw tree with prp
-prp(cp_oppose.tree.prune, type = 4)
-
-# Draw tree using fancyRpartPlot
-fancyRpartPlot(cp_oppose.tree.prune,
-               type = 4,
-               palettes = "YlOrBr")
-# Labels look better here
-
-# Draw tree with tree package
-draw.tree(cp_oppose.tree.prune, 
-          nodeinfo = TRUE,
-          print.levels = TRUE,
-          cex = 0.5)
-
-# Draw tree using base plot
-plot(cp_oppose.tree.prune)
-text(cp_oppose.tree.prune)
-
-
-# .. Use the caret package ####
-# Grow the tree
-set.seed(1509)
-cp_oppose.tree = train(cp_oppose ~ . -cp_oppose,
+# Simulation with the lowest misclassification rate
+sim <- which(records[, "misclass"] == min(records[, "misclass"]))
+ind <- indices[, sim]
+sample.train <- sample_complete[-ind, ]
+sample.test <- sample_complete[ind, ]
+tree.opts <- tree.control(nrow(sample.train), 
+                          minsize = 5, 
+                          mindev = 1e-5)
+cp_oppose.tree <- tree(cp_oppose ~ . -cp_oppose,
                        data = sample.train, 
-                       method = "rpart",
-                       trControl = trainControl(method = "cv"))
-
-# Draw tree using fancyRpartPlot
-fancyRpartPlot(cp_oppose.tree$finalModel,
-               type = 4,
-               palettes = "YlOrBr")
-
-# Draw tree with tree package
-draw.tree(cp_oppose.tree$finalModel, 
+                       control = tree.opts)
+cp_oppose.tree.10 <- prune.tree(cp_oppose.tree, 
+                                best = 10)
+draw.tree(cp_oppose.tree.10, 
           nodeinfo = TRUE,
           print.levels = TRUE,
           cex = 0.5)
-
-# Draw tree using base plot
-plot(cp_oppose.tree$finalModel)
-text(cp_oppose.tree$finalModel)
-
-# Draw tree with rpart package
-rpart.plot(cp_oppose.tree$finalModel)
-
-
-# .. Data manip ####
-sample_complete <- sample_complete %>%
-  mutate_at(vars(cp_oppose, bachelors, rural, conservative,
-                 owner, fossil_home, fossil_water, fossil_stove,
-                 drive),
-            ~bin_to_num(.)) %>%
-  mutate_at(vars(income_6, inc_heat_perceived_4, inc_gas_perceived_4),
-            ~as.character(.))
-
-levels(sample_complete$cp_oppose) <- c("Support", "Oppose")
-levels(sample_complete$conservative) <- c("No", "Yes")
-levels(sample_complete$rural) <- c("No", "Yes")
-levels(sample_complete$bachelors) <- c("No", "Yes")
-levels(sample_complete$fossil_home) <- c("No", "Yes")
-levels(sample_complete$owner) <- c("No", "Yes")
 
 
 
@@ -1097,7 +1057,7 @@ panel %>%
   select(bill_heatingoil_num) %>%
   drop_na %>%
   nrow
-# 16
+# 20
 # Can't use the heating oil variables
 
 table(panel$km_driven_23, panel$wave, useNA = "ifany")
@@ -1159,7 +1119,7 @@ select_features <- c(
                      "inc_gas_perceived_num",
                      "inc_overall_perceived_num",
                      "gasprice_change_perceived_num",
-                     "gasprice_change_jan_perceived_num",
+                     # "gasprice_change_jan_perceived_num",
                      "fossil_home",
                      # "renewable_home",
                      # "fossil_water",
@@ -1171,7 +1131,7 @@ select_features <- c(
                      "bill_elec_num",
                      # "bill_natgas_winter_num_mid",
                      # "bill_natgas_summer_num_mid",
-                     "bill_natgas_num",
+                     # "bill_natgas_num",
                      # "bill_heatingoil_winter_num_mid",
                      # "bill_heatingoil_num",
                      # "bill_diesel_num_mid",
@@ -1198,7 +1158,8 @@ ggbiplot(pca,
          ellipse = TRUE)
 ggbiplot(pca,
          groups = sample_pca$cp_oppose,
-         ellipse = TRUE)
+         ellipse = TRUE,
+         alpha = 0.5)
 ggbiplot(pca,
          groups = sample_pca$cp_strongsupport,
          ellipse = TRUE)
