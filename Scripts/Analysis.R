@@ -216,7 +216,8 @@ panel <- panel %>%
                                          inc_gas_perceived_6 == "$100 or more per month" ~
                                             "$100 or more per month")) %>%
   mutate(inc_heat_perceived_4 = as.factor(inc_heat_perceived_4),
-         inc_gas_perceived_4 = as.factor(inc_gas_perceived_4)) %>%
+         inc_gas_perceived_4 = as.factor(inc_gas_perceived_4))
+panel <- panel %>%
   mutate(inc_heat_perceived_4 = fct_relevel(inc_heat_perceived_4,
                                             "$0 per month",
                                             "$1-$50 per month",
@@ -242,7 +243,8 @@ add_to_codebook <- data.frame(vars = c("inc_heat_perceived_4", "inc_gas_perceive
 
 codebook <- rbind(codebook, add_to_codebook)
 codebook <- codebook %>%
-  arrange(group, vars)
+  arrange(group, vars) %>%
+  distinct(vars, .keep_all = TRUE)
 
 write.csv(codebook, file = here("Data", "codebook.csv"), row.names = FALSE)
 
@@ -297,7 +299,7 @@ kbl(codebook %>%
   column_spec(3, width = "4em") %>%
   column_spec(4, width = "13em")
 
-rm(levs, used)
+rm(used)
 
 
 
@@ -1533,12 +1535,12 @@ cp_oppose.tree.10 <- prune.tree(cp_oppose.tree,
                                 best = 10)
 
 # Draw tree with tree package
-dev.off()
+# dev.off()
 draw.tree(cp_oppose.tree.10, 
           nodeinfo = TRUE,
           print.levels = TRUE,
           cex = 0.7)
-pdf(here("Figures", "classification_tree.pdf"))
+jpeg(here("Figures", "classification_tree.jpg"))
 dev.off()
 
 
