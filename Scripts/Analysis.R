@@ -936,18 +936,18 @@ summary(pca)
 
 # Extract loadings from PC1
 PC1 <- pca$rotation[, 1]
-sort(abs(PC1), decreasing = T)
+sort(PC1, decreasing = T)
 
 # Extract loadings from PC2
 PC2 <- pca$rotation[, 2]
-sort(abs(PC2), decreasing = T)
+sort(PC2, decreasing = T)
 
 
 # .. Biplots ####
 g <- ggbiplot(pca,
               groups = sample_pca$cp_support,
               ellipse = TRUE,
-              alpha = 0.5,
+              alpha = 0.3,
               varname.size = 8) +
   scale_color_manual(name = "Carbon pricing",
                      labels = c("Oppose",
@@ -963,7 +963,7 @@ ggsave(g,
 g <- ggbiplot(pca,
               groups = sample_pca$cp_oppose,
               ellipse = TRUE,
-              alpha = 0.5,
+              alpha = 0.3,
               varname.size = 8) +
   scale_color_manual(name = "Carbon pricing",
                      labels = c("Support",
@@ -979,27 +979,27 @@ ggsave(g,
 ggbiplot(pca,
          groups = sample_pca$cp_strongsupport,
          ellipse = TRUE,
-         alpha = 0.5)
+         alpha = 0.3)
 ggbiplot(pca,
          groups = sample_pca$cp_strongoppose,
          ellipse = TRUE,
-         alpha = 0.5)
+         alpha = 0.3)
 ggbiplot(pca,
          groups = sample_pca$party_9,
          ellipse = TRUE,
-         alpha = 0.5)
+         alpha = 0.3)
 
 # Plot other PCs
 ggbiplot(pca,
          choices = c(1, 3),
          groups = sample_pca$cp_oppose,
          ellipse = TRUE,
-         alpha = 0.5)
+         alpha = 0.3)
 ggbiplot(pca,
          choices = c(3, 4),
          groups = sample_pca$cp_oppose,
          ellipse = TRUE,
-         alpha = 0.5)
+         alpha = 0.3)
 
 
 # .. Hierarchical clustering ####
