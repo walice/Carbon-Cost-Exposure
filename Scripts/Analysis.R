@@ -283,7 +283,7 @@ used <- c("cp_support",
           # "renewable_stove",
           "familiar_bills_3",
           "bill_elec_num",
-          "bill_natgas_num",
+          # "bill_natgas_num",
           "bill_diesel_num")
 
 kbl(codebook %>% 
@@ -1139,7 +1139,7 @@ fit2c <- lm(bin_to_num(cp_oppose) ~ edu_5 + income_6 + rural +
               # owner + home_size_num +
               # fossil_home + fossil_water + fossil_stove +
               drive + vehicle_num + km_driven_num +
-              bill_elec_num + bill_natgas_num + bill_diesel_num,
+              bill_elec_num + bill_diesel_num,
             data = sample)
 summary(fit2c)
 nobs(fit2c)
@@ -1149,7 +1149,7 @@ fit2d <- lm(bin_to_num(cp_oppose) ~ edu_5 + income_6 + rural +
               owner + home_size_num +
               fossil_home + fossil_water + fossil_stove +
               drive + vehicle_num + km_driven_num +
-              bill_elec_num + bill_natgas_num + bill_diesel_num,
+              bill_elec_num + bill_diesel_num,
            data = sample)
 summary(fit2d)
 nobs(fit2d)
@@ -1157,9 +1157,7 @@ nobs(fit2d)
 stargazer(fit2a, fit2b, fit2c, fit2d, 
           type = "text",
           out = here("Results", "pricing_actual.txt"))
-AIC(fit2b,
-    fit2c)
-# Choose fit2b but report all models in appendix
+# Choose fit2d but report all models in appendix
 
 
 # .. Add interaction terms for actual costs ####
@@ -1168,18 +1166,19 @@ fit3a <- lm(bin_to_num(cp_oppose) ~ edu_5 + income_6 + rural +
               owner + home_size_num +
               fossil_home + fossil_water + fossil_stove +
               home_size_num * fossil_home +
+              bill_elec_num + bill_diesel_num +
               drive + vehicle_num + km_driven_num +
-              drive * vehicle_num,
+              drive * km_driven_num,
             data = sample)
 summary(fit3a)
 nobs(fit3a)
 
-stargazer(fit2b, fit3a, 
+stargazer(fit2d, fit3a, 
           type = "text",
           out = here("Results", "pricing_actual_interactions.txt"))
-AIC(fit2b,
+AIC(fit2d,
     fit3a)
-# fit3a performs better
+# fit3a performs marginally better
 # But only interaction between drive and km_driven_num is significant
 
 
@@ -1187,13 +1186,14 @@ AIC(fit2b,
 # Include perceived and actual costs in the model
 fit4a <- lm(bin_to_num(cp_oppose) ~ edu_5 + income_6 + rural +
               left_right_num + conservative +
-              inc_heat_perceived_4 + inc_gas_perceived_4 + 
-              inc_overall_perceived_num + gasprice_change_perceived_num +
+              inc_heat_perceived_4 + inc_gas_perceived_4 + inc_overall_perceived_num +
+              gasprice_change_perceived_num +
               owner + home_size_num +
               fossil_home + fossil_water + fossil_stove +
               home_size_num * fossil_home +
+              bill_elec_num + bill_diesel_num +
               drive + vehicle_num + km_driven_num +
-              drive * vehicle_num,
+              drive * km_driven_num,
             data = sample)
 summary(fit4a)
 nobs(fit4a)
@@ -1222,17 +1222,19 @@ stargazer(fit0a,
                                "Perceived inc. heating: 1-50 per month", "Perceived inc. heating: 50-99 per month", "Perceived inc. heating: 100 or more per month",
                                "Perceived inc. gas: 1-50 per month", "Perceived inc. gas: 50-99 per month", "Perceived inc. gas: 100 or more per month",
                                "Perceived increase in overall costs (due to CP)",
-                               "Perceivedincrease in gas prices (cents/liter)",
+                               "Perceived increase in gas prices (cents/liter)",
                                "Home owner (dummy)",
                                "Home size (square ft.)",
                                "Home heating is fossil fuels (dummy)",
                                "Water heating is fossil fuels (dummy)",
                                "Fossil fuel stove (dummy)",
+                               "Monthly electricity bill",
+                               "Monthly gasoline/diesel bill",
                                "Drives to work (dummy)",
                                "Number of vehicles owned",
                                "Yearly kilometers driven",
                                "Home size * fossil home",
-                               "Drives to work * number of vehicles"),
+                               "Drives to work * Kilometers driven"),
           # model.numbers = FALSE,
           single.row = TRUE,
           se = NULL,
@@ -1256,6 +1258,8 @@ vars <- c("cp_oppose",
           "fossil_home",
           "fossil_water",
           "fossil_stove",
+          "bill_elec_num",
+          "bill_diesel_num",
           "drive",
           "vehicle_num",
           "km_driven_num")
@@ -1273,13 +1277,13 @@ anova(fit0a_complete, fit4a)
 
 fit1c_complete <- update(fit1c, data = sample_complete)
 anova(fit1c_complete, fit4a)
-# Reject the null hypothesis that the full model fit4a can be reduced 
+# Fail to reject the null hypothesis that the full model fit4a can be reduced 
 # to the perceived costs model fit1c_complete
 
-fit2b_complete <- update(fit2b, data = sample_complete)
-anova(fit2b_complete, fit4a)
+fit2d_complete <- update(fit2d, data = sample_complete)
+anova(fit2d_complete, fit4a)
 # Reject the null hypothesis that the full model fit4a can be reduced 
-# to the actual costs model fit2b_complete
+# to the actual costs model fit2d_complete
 
 fit3a_complete <- update(fit3a, data = sample_complete)
 anova(fit3a_complete, fit4a)
@@ -1456,7 +1460,7 @@ stargazer(fit5d,
                                "Drives to work (dummy)",
                                "Yearly kilometers driven",
                                "Monthly gasoline/diesel bill",
-                               "Perceived increase in gas prices (cents/liter)",
+                               "Perceived inc. in gas prices (cents/liter)",
                                "Conservative * Monthly diesel bill",
                                "Home owner (dummy)",
                                "Home size (square ft.)",
