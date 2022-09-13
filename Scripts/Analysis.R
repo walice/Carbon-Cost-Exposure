@@ -230,25 +230,20 @@ panel <- panel %>%
 
 
 # .. Add to codebook ####
-perceptions.vars <- c(perceptions.vars, "inc_heat_perceived_4", "inc_gas_perceived_4")
-perceptions.vars <- unique(perceptions.vars)
+add_to_codebook <- data.frame(vars = c("inc_heat_perceived_4", "inc_gas_perceived_4"),
+                              class = c(class(panel$inc_heat_perceived_4), class(panel$inc_gas_perceived_4)),
+                              missing_obs = c(sum(is.na(panel$inc_heat_perceived_4)), sum(is.na(panel$inc_gas_perceived_4))),
+                              factor_levels = rep(paste(c("$0 per month",
+                                                          "$1-$50 per month",
+                                                          "$50-$99 per month",
+                                                          "$100 or more per month"), collapse = ", "), 2),
+                              group = rep("perceptions.vars", 2),
+                              row.names = NULL)
 
-levs <- sapply(panel, levels)
-codebook <- data.frame(vars = colnames(panel),
-                       class = sapply(panel, class),
-                       missing_obs = sapply(panel, function(x) sum(is.na(x))),
-                       factor_levels = sapply(levs, paste, collapse = ", "),
-                       row.names = NULL,
-                       group = c(rep("id.vars", length(id.vars)),
-                                 rep("treatment.vars", length(treatment.vars)),
-                                 rep("demographic.vars", length(demographic.vars)),
-                                 rep("household.vars", length(household.vars)),
-                                 rep("transport.vars", length(transport.vars)),
-                                 rep("partisanship.vars", length(partisanship.vars)),
-                                 rep("opinions.vars", length(opinions.vars)),
-                                 rep("perceptions.vars", length(perceptions.vars)),
-                                 rep("energy.vars", length(energy.vars)),
-                                 rep("bill.vars", length(bill.vars))))
+codebook <- rbind(codebook, add_to_codebook)
+codebook <- codebook %>%
+  arrange(group, vars)
+
 write.csv(codebook, file = here("Data", "codebook.csv"), row.names = FALSE)
 
 used <- c("cp_support",
@@ -1302,45 +1297,73 @@ sample <- panel %>%
 # .. Model perceptions of carbon pricing on gasoline costs ####
 fit5a <- lm(inc_gas_perceived_num ~ conservative + 
               income_num_mid +
+              rural +
               familiar_bills_3 +
               vehicle_num + drive + km_driven_num +
-              rural +
               gasprice_change_perceived_num, 
             data = sample)
 summary(fit5a)
 nobs(fit5a)
 
-# With interactions
 fit5b <- lm(inc_gas_perceived_num ~ conservative + 
               income_num_mid +
+              rural +
               familiar_bills_3 +
               vehicle_num + drive + km_driven_num +
-              drive * km_driven_num +
-              rural +
+              bill_diesel_num +
               gasprice_change_perceived_num, 
             data = sample)
 summary(fit5b)
 nobs(fit5b)
 
+# With interactions
 fit5c <- lm(inc_gas_perceived_num ~ conservative + 
+              rural +
               income_num_mid +
               familiar_bills_3 +
               vehicle_num + drive + km_driven_num +
-              rural +
-              gasprice_change_perceived_num +
-              gasprice_change_perceived_num * conservative, 
+              drive * km_driven_num +
+              bill_diesel_num +
+              gasprice_change_perceived_num, 
             data = sample)
 summary(fit5c)
 nobs(fit5c)
 
-stargazer(fit5a, fit5b, fit5c, 
+fit5d <- lm(inc_gas_perceived_num ~ conservative + 
+              rural +
+              income_num_mid +
+              familiar_bills_3 +
+              vehicle_num + drive + km_driven_num +
+              bill_diesel_num +
+              conservative * bill_diesel_num +
+              gasprice_change_perceived_num, 
+            data = sample)
+summary(fit5d)
+nobs(fit5d)
+
+stargazer(fit5a, fit5b, fit5c, fit5d, 
           type = "text",
           out = here("Results", "perceived_gas_costs.txt"))
-AIC(fit5a, fit5b, fit5c)
-# fit5a is marginally better
-anova(fit5a, fit5b)
-anova(fit5a, fit5c)
-# Fail to reject the null hypotheses that the models can be reduced to fit5a
+AIC(fit5a, fit5b, fit5c, fit5d)
+# fit5d is marginally better
+
+sample_complete <- sample %>%
+  select(c(inc_gas_perceived_num,
+           conservative,
+           rural,
+           income_num_mid,
+           familiar_bills_3,
+           vehicle_num,
+           drive,
+           km_driven_num,
+           bill_diesel_num,
+           gasprice_change_perceived_num)) %>%
+  drop_na
+
+# Perform F-test to compare nested models
+fit5a_complete <- update(fit5a, data = sample_complete)
+anova(fit5a_complete, fit5d)
+# Reject the null hypothesis that the model can be reduced to fit5a
 
 
 # .. Model perceptions of carbon pricing on heating costs ####
@@ -1348,7 +1371,8 @@ fit6a <- lm(inc_heat_perceived_num ~ conservative +
               income_num_mid +
               familiar_bills_3 +
               owner + home_size_num +
-              fossil_home, 
+              fossil_home +
+              bill_elec_num, 
             data = sample)
 summary(fit6a)
 nobs(fit6a)
@@ -1359,18 +1383,20 @@ fit6b <- lm(inc_heat_perceived_num ~ conservative +
               familiar_bills_3 +
               owner + home_size_num +
               fossil_home +
-              home_size_num * fossil_home, 
+              home_size_num * fossil_home +
+              bill_elec_num, 
             data = sample)
 summary(fit6b)
 nobs(fit6b)
 
-stargazer(fit6a, fit6b, 
-          type = "text",
-          out = here("Results", "perceived_heating_costs.txt"))
 AIC(fit6a, fit6b)
 # fit6a is marginally better
 anova(fit6a, fit6b)
 # Fail to reject the null hypothesis that the full model can be reduced to fit6a
+
+stargazer(fit6a, fit6b, 
+          type = "text",
+          out = here("Results", "perceived_heating_costs.txt"))
 
 
 # .. Model perceptions of carbon pricing on overall costs ####
@@ -1379,9 +1405,11 @@ fit7a <- lm(inc_overall_perceived_num ~ conservative +
               familiar_bills_3 +
               vehicle_num + drive + km_driven_num +
               rural +
+              bill_diesel_num +
               gasprice_change_perceived_num +
               owner + home_size_num +
-              fossil_home, 
+              fossil_home +
+              bill_elec_num, 
             data = sample)
 summary(fit7a)
 nobs(fit7a)
@@ -1393,38 +1421,45 @@ fit7b <- lm(inc_overall_perceived_num ~ conservative +
               vehicle_num + drive + km_driven_num +
               drive * km_driven_num +
               rural +
+              bill_diesel_num +
               gasprice_change_perceived_num +
               owner + home_size_num +
               fossil_home +
-              home_size_num * fossil_home, 
+              home_size_num * fossil_home +
+              bill_elec_num, 
             data = sample)
 summary(fit7b)
 nobs(fit7b)
 
+AIC(fit7a, fit7b)
+# fit7a is marginally better
 anova(fit7a, fit7b)
 # Fail to reject the null hypothesis that the model can be reduced to fit6a
 
-stargazer(fit5a, fit6a, fit7a,
+stargazer(fit5d, fit6a, fit7a,
           type = "text",
           out = here("Results", "perceived_overall_costs.txt"))
 
-stargazer(fit5a,
+stargazer(fit5d,
           fit6a,
           fit7a,
           type = "latex", style = "ajps",
           title = "Determinants of the perceptions of the costs of carbon pricing",
           dep.var.labels = c("Gasoline costs", "Heating costs", "Overall costs"),
           covariate.labels = c("Conservative (dummy)",
+                               "Rural (dummy)",
                                "Household income",
                                "Household bills: Somewhat familiar", "Household bills: Very familiar",
                                "Number of vehicles owned",
                                "Drives to work (dummy)",
                                "Yearly kilometers driven",
-                               "Rural (dummy)",
+                               "Monthly gasoline/diesel bill",
                                "Perceived increase in gas prices (cents/liter)",
+                               "Conservative * Monthly diesel bill",
                                "Home owner (dummy)",
                                "Home size (square ft.)",
-                               "Home heating is fossil fuels (dummy)"),
+                               "Home heating is fossil fuels (dummy)",
+                               "Monthly electricity bill"),
                                # model.numbers = FALSE,
           # multicolumn = FALSE,
           keep.stat = c("n", "adj.rsq"))
@@ -1453,8 +1488,10 @@ vars <- c(
   "fossil_water",
   "fossil_stove",
   "drive",
-  "vehicle_num"
-  # "km_driven_num"
+  "vehicle_num",
+  # "km_driven_num",
+  "bill_diesel_num",
+  "bill_elec_num"
 )
 
 # Subset data to obtain complete cases for the variables in the model
