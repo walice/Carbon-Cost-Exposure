@@ -12,11 +12,17 @@
 # Functions
 # Transformations
 # .. Relevel factors
+# .. Add to codebook
 # Data Imputation
 # .. Impute time-invariant variables from previous waves
 # .. Impute missing data on perceptions from wave 6
 # .. Impute missing data on bills from wave 6
 # .. Check coverage of data imputation procedure
+# PCA
+# .. Select features
+# .. Estimate principal components
+# .. Biplots
+# .. Hierarchical clustering
 # Regressions
 # .. Baseline model of support for carbon pricing
 # .. Regress support for carbon pricing on perceived costs
@@ -24,18 +30,13 @@
 # .. Add interaction terms for actual costs
 # .. Regress carbon pricing support on a model of perceived and actual costs
 # .. Compare nested models
-# Classification Tree
+# Classification Trees
 # .. Prep the data
 # .. Randomly split data into training and test sets
 # .. Use the tree package
 # .. Simulate 1,000 trees to obtain most important variable
 # .. Random forest approach
 # .. Create variable importance plot
-# PCA
-# .. Select features
-# .. Estimate principal components
-# .. Biplots
-# .. Hierarchical clustering
 # Cost Perceptions
 # .. Model perceptions of carbon pricing on gasoline costs
 # .. Model perceptions of carbon pricing on heating costs
@@ -51,9 +52,9 @@ library(caret)
 library(dendextend)
 library(devtools)
 library(ggbiplot)
+library(kableExtra)
 library(maptree)
 library(naniar)
-# library(rattle)
 library(regclass)
 library(reshape2)
 library(rpart)
@@ -166,12 +167,12 @@ panel <- panel %>%
                              "College",
                              "Graduate or prof. degree"),
          income_6 = fct_relevel(income_6,
-                                "Less than 20,000",
-                                "20,000-40,000",
-                                "40,000-60,000",
-                                "60,000-80,000",
-                                "80,000-100,000",
-                                "100,000 and over"),
+                                "Less than $20,000",
+                                "$20,000-$40,000",
+                                "$40,000-$60,000",
+                                "$60,000-$80,000",
+                                "$80,000-$100,000",
+                                "$100,000 and over"),
          inc_heat_perceived_6 = fct_relevel(inc_heat_perceived_6,
                                             "$0 per month",
                                             "$1-$24 per month",
@@ -226,6 +227,82 @@ panel <- panel %>%
                                            "$1-$50 per month",
                                            "$50-$99 per month",
                                            "$100 or more per month"))
+
+
+# .. Add to codebook ####
+perceptions.vars <- c(perceptions.vars, "inc_heat_perceived_4", "inc_gas_perceived_4")
+perceptions.vars <- unique(perceptions.vars)
+
+levs <- sapply(panel, levels)
+codebook <- data.frame(vars = colnames(panel),
+                       class = sapply(panel, class),
+                       missing_obs = sapply(panel, function(x) sum(is.na(x))),
+                       factor_levels = sapply(levs, paste, collapse = ", "),
+                       row.names = NULL,
+                       group = c(rep("id.vars", length(id.vars)),
+                                 rep("treatment.vars", length(treatment.vars)),
+                                 rep("demographic.vars", length(demographic.vars)),
+                                 rep("household.vars", length(household.vars)),
+                                 rep("transport.vars", length(transport.vars)),
+                                 rep("partisanship.vars", length(partisanship.vars)),
+                                 rep("opinions.vars", length(opinions.vars)),
+                                 rep("perceptions.vars", length(perceptions.vars)),
+                                 rep("energy.vars", length(energy.vars)),
+                                 rep("bill.vars", length(bill.vars))))
+write.csv(codebook, file = here("Data", "codebook.csv"), row.names = FALSE)
+
+used <- c("cp_support",
+          "cp_oppose",
+          "female",
+          "french",
+          "edu_5",
+          "bachelors",
+          "income_6",
+          "income_num_mid",
+          "rural_7",
+          "rural",
+          "homeowner_3",
+          "owner",
+          "home_size_num",
+          "vehicle_num",
+          "commute_7",
+          "drive",
+          "km_driven_num",
+          "left_right_num",
+          "party_9",
+          "conservative",
+          "liberal",
+          "inc_heat_perceived_4",
+          "inc_heat_perceived_num",
+          "inc_gas_perceived_4",
+          "inc_gas_perceived_num",
+          "inc_overall_perceived_num",
+          "gasprice_change_perceived_num",
+          "fossil_home",
+          # "renewable_home",
+          "fossil_water",
+          # "renewable_water",
+          "fossil_stove",
+          # "renewable_stove",
+          "familiar_bills_3",
+          "bill_elec_num",
+          "bill_natgas_num",
+          "bill_diesel_num")
+
+kbl(codebook %>% 
+      filter(vars %in% used) %>%
+      rename(missing = missing_obs,
+             variable = vars) %>%
+      mutate(class = ifelse(class == "factor", "categorical", class)),
+    format = "latex",
+    longtable = TRUE) %>%
+  kable_classic(latex_options = "striped") %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(1, width = "15em", monospace = TRUE) %>%
+  column_spec(3, width = "4em") %>%
+  column_spec(4, width = "13em")
+
+rm(levs, used)
 
 
 
@@ -741,12 +818,221 @@ save(panel, file = here("Data", "Processed", "panel_imputed.Rdata"))
 
 
 ## ## ## ## ## ## ## ## ## ## ##
+# PCA                       ####
+## ## ## ## ## ## ## ## ## ## ##
+
+load(here("Data", "Processed", "panel_imputed.Rdata"))
+
+
+# .. Select features ####
+miss <- panel %>%
+  miss_var_summary() %>%
+  arrange(desc(pct_miss))
+
+miss7 <- panel %>%
+  filter(wave == "wave7") %>%
+  miss_var_summary() %>%
+  arrange(desc(pct_miss))
+
+table(panel$bill_heatingoil_num, panel$wave, useNA = "ifany")
+panel %>%
+  select(bill_heatingoil_num) %>%
+  drop_na %>%
+  nrow
+# 20
+# Can't use the heating oil variables
+
+table(panel$km_driven_23, panel$wave, useNA = "ifany")
+panel %>%
+  select(km_driven_23) %>%
+  drop_na %>%
+  nrow
+# 469
+panel %>%
+  select(km_driven_23, wave) %>%
+  drop_na %>%
+  group_by(wave) %>%
+  tally
+# This is all wave 7
+
+table(panel$familiar_bills_3, panel$wave, useNA = "ifany")
+# No missing, all wave 7
+
+table(panel$bill_diesel_13, panel$wave, useNA = "ifany")
+# No missing, all wave 1
+
+panel %>%
+  select(bill_diesel_num, wave) %>%
+  drop_na %>%
+  group_by(wave) %>%
+  tally
+# wave      n
+# <fct> <int>
+# 1 wave6   915
+# 2 wave7   930
+
+table(panel$inc_heat_perceived_6, panel$wave, useNA = "ifany")
+# No missing, data for waves 1, 4, 6, and 7
+
+panel %>%
+  select(inc_heat_perceived_num, wave) %>%
+  drop_na %>%
+  group_by(wave) %>%
+  tally
+# <fct> <int>
+# 1 wave6   915
+# 2 wave7   576
+
+select_features <- c(
+  "conservative",
+  "liberal",
+  "female",
+  "french",
+  "bachelors",
+  "income_num_mid",
+  "rural",
+  "owner",
+  # "home_size_num",
+  "vehicle_num",
+  "drive",
+  # "km_driven_num",
+  "left_right_num",
+  "inc_heat_perceived_num",
+  "inc_gas_perceived_num",
+  "inc_overall_perceived_num",
+  "gasprice_change_perceived_num",
+  # "gasprice_change_jan_perceived_num",
+  "fossil_home",
+  # "renewable_home",
+  # "fossil_water",
+  # "renewable_water",
+  # "fossil_stove",
+  # "renewable_stove"
+  # "bill_elec_winter_num_mid",
+  # "bill_elec_summer_num_mid",
+  "bill_elec_num",
+  # "bill_natgas_winter_num_mid",
+  # "bill_natgas_summer_num_mid",
+  # "bill_natgas_num",
+  # "bill_heatingoil_winter_num_mid",
+  # "bill_heatingoil_num",
+  # "bill_diesel_num_mid",
+  "bill_diesel_num"
+)
+
+select_labels <- c("cp_support",
+                   "cp_oppose",
+                   "cp_strongsupport",
+                   "cp_strongoppose",
+                   "party_9")
+
+sample_pca <- panel %>%
+  select(all_of(c(select_features, select_labels))) %>%
+  mutate_at(vars(c(select_features)), ~bin_to_num(.)) %>%
+  drop_na()
+
+
+# .. Estimate principal components ####
+pca <- prcomp(sample_pca[, !names(sample_pca) %in% select_labels], 
+              scale = TRUE, center = TRUE)
+summary(pca)
+
+# Extract loadings from PC1
+PC1 <- pca$rotation[, 1]
+sort(abs(PC1), decreasing = T)
+
+# Extract loadings from PC2
+PC2 <- pca$rotation[, 2]
+sort(abs(PC2), decreasing = T)
+
+
+# .. Biplots ####
+g <- ggbiplot(pca,
+              groups = sample_pca$cp_support,
+              ellipse = TRUE,
+              alpha = 0.5,
+              varname.size = 8) +
+  scale_color_manual(name = "Carbon pricing",
+                     labels = c("Oppose",
+                                "Support"),
+                     values = c("#00B0F6", "#FFD84D")) +
+  labs(title = "Principal components of support for carbon pricing") +
+  theme(legend.text = element_text(size = 20))
+g
+ggsave(g,
+       file = here("Figures", "biplot_support_12.png"),
+       width = 6, height = 4, units = "in")
+
+g <- ggbiplot(pca,
+              groups = sample_pca$cp_oppose,
+              ellipse = TRUE,
+              alpha = 0.5,
+              varname.size = 8) +
+  scale_color_manual(name = "Carbon pricing",
+                     labels = c("Support",
+                                "Oppose"),
+                     values = c("#FFD84D", "#00B0F6")) +
+  labs(title = "Principal components of opposition to carbon pricing") +
+  theme(legend.text = element_text(size = 20))
+g
+ggsave(g,
+       file = here("Figures", "biplot_oppose_12.png"),
+       width = 6, height = 4, units = "in")
+
+ggbiplot(pca,
+         groups = sample_pca$cp_strongsupport,
+         ellipse = TRUE,
+         alpha = 0.5)
+ggbiplot(pca,
+         groups = sample_pca$cp_strongoppose,
+         ellipse = TRUE,
+         alpha = 0.5)
+ggbiplot(pca,
+         groups = sample_pca$party_9,
+         ellipse = TRUE,
+         alpha = 0.5)
+
+# Plot other PCs
+ggbiplot(pca,
+         choices = c(1, 3),
+         groups = sample_pca$cp_oppose,
+         ellipse = TRUE,
+         alpha = 0.5)
+ggbiplot(pca,
+         choices = c(3, 4),
+         groups = sample_pca$cp_oppose,
+         ellipse = TRUE,
+         alpha = 0.5)
+
+
+# .. Hierarchical clustering ####
+# Compute Euclidean distance matrix
+dist2 <- dist(sample_pca[, !names(sample_pca) %in% select_labels], method = "euclidean")
+
+# Perform hierarchical clustering with complete linkage
+set.seed(1509)
+hclust <- hclust(dist2, method = "complete")
+
+# Plot dendogram colored by 2 clusters
+dend1 <- as.dendrogram(hclust)
+dend1 <- color_branches(dend1, k = 2)
+dend1 <- color_labels(dend1, k = 2)
+dend1 <- set(dend1, "labels_cex", 0.5)
+dend1 <- set_labels(dend1, 
+                    labels = sample_pca$cp_oppose[order.dendrogram(dend1)])
+plot(dend1)
+rm(dend1, hclust, dist2)
+
+
+
+## ## ## ## ## ## ## ## ## ## ##
 # REGRESSIONS               ####
 ## ## ## ## ## ## ## ## ## ## ##
 
 load(here("Data", "Processed", "panel_imputed.Rdata"))
 
 wave7IDs <- panel %>% filter(wave == "wave7") %>% pull(responseid)
+
 sample <- panel %>% 
   filter(responseid %in% wave7IDs)
 
@@ -936,16 +1222,16 @@ stargazer(fit0a,
                                "Rural (dummy)",
                                "Left-right: 0-1 (1 is far right)",
                                "Conservative (dummy)",
-                               "Per. inc. heating: 1-50 per month", "Per. inc. heating: 50-99 per month", "Per. inc. heating: 100 or more per month",
-                               "Per. inc. gas: 1-50 per month", "Per. inc. gas: 50-99 per month", "Per. inc. gas: 100 or more per month",
-                               "Per. increase in overall costs (due to CP)",
-                               "Per.increase in gas prices (cents/liter)",
+                               "Perceived inc. heating: 1-50 per month", "Perceived inc. heating: 50-99 per month", "Perceived inc. heating: 100 or more per month",
+                               "Perceived inc. gas: 1-50 per month", "Perceived inc. gas: 50-99 per month", "Perceived inc. gas: 100 or more per month",
+                               "Perceived increase in overall costs (due to CP)",
+                               "Perceivedincrease in gas prices (cents/liter)",
                                "Home owner (dummy)",
                                "Home size (square ft.)",
                                "Home heating is fossil fuels (dummy)",
                                "Water heating is fossil fuels (dummy)",
                                "Fossil fuel stove (dummy)",
-                               "Drives to work",
+                               "Drives to work (dummy)",
                                "Number of vehicles owned",
                                "Yearly kilometers driven",
                                "Home size * fossil home",
@@ -1006,397 +1292,7 @@ anova(fit3a_complete, fit4a)
 
 
 ## ## ## ## ## ## ## ## ## ## ##
-# CLASSIFICATION TREE       ####
-## ## ## ## ## ## ## ## ## ## ##
-
-# .. Prep the data ####
-vars <- c(
-          "cp_oppose",
-          "bachelors",
-          "income_num_mid",
-          "rural",
-          # "left_right_num",
-          "conservative",
-          # "inc_heat_perceived_num",
-          "inc_gas_perceived_num",
-          "inc_overall_perceived_num",
-          "gasprice_change_perceived_num",
-          "owner",
-          # "home_size_num",
-          "fossil_home",
-          "fossil_water",
-          "fossil_stove",
-          "drive",
-          "vehicle_num"
-          # "km_driven_num"
-          )
-
-# Subset data to obtain complete cases for the variables in the model
-sample_complete <- sample %>%
-  select(all_of(vars)) %>%
-  drop_na
-
-# Data manip
-sample_complete <- sample_complete %>%
-  mutate_at(vars(bachelors, rural, conservative,
-                 owner, fossil_home, fossil_water, fossil_stove,
-                 drive),
-            ~bin_to_num(.))
-
-levels(sample_complete$cp_oppose) <- c("Support", "Oppose")
-
-
-# .. Randomly split data into training and test sets ####
-set.seed(1509)
-test.indices <- sample(1:nrow(sample_complete), round(nrow(sample_complete)*0.2))
-sample.train <- sample_complete[-test.indices, ]
-sample.test <- sample_complete[test.indices, ]
-
-
-# .. Use the tree package ####
-# Set tree controls
-tree.opts <- tree.control(nrow(sample.train), 
-                          minsize = 5, 
-                          mindev = 1e-5)
-
-# Grow the tree
-set.seed(1509)
-cp_oppose.tree <- tree(cp_oppose ~ . -cp_oppose,
-                       data = sample.train, 
-                       control = tree.opts)
-
-# Perform cost-complexity pruning
-cp_oppose.tree.10 <- prune.tree(cp_oppose.tree, 
-                                best = 10)
-
-# Draw tree with tree package
-draw.tree(cp_oppose.tree.10, 
-          nodeinfo = TRUE,
-          print.levels = TRUE,
-          cex = 0.7)
-pdf(here("Figures", "classification_tree.pdf"))
-dev.off()
-
-
-# .. Simulate 1,000 trees to obtain most important variable ####
-# Set up records to collect top variable
-nsims <- 1000
-records <- matrix(NA, ncol = 6, nrow = nsims)
-colnames(records) <- c("simulation", "variable", 
-                       "2nd var", "misclass", "used", "size")
-indices <- matrix(NA, ncol = nsims, nrow = nrow(sample.test))
-
-set.seed(1509)
-i <- 1
-for (i in 1:nsims){
-  test.indices <- sample(1:nrow(sample_complete), round(nrow(sample_complete)*0.2))
-  sample.train <- sample_complete[-test.indices, ]
-  sample.test <- sample_complete[test.indices, ]
-  indices[, i] <- test.indices
-  
-  tree <- NULL
-  tree <- tree(cp_oppose ~ . -cp_oppose,
-               data = sample.train, 
-               control = tree.opts)
-  tree.10 <- prune.tree(tree, 
-                        best = 10)
-  records[i, 1] <- i
-  records[i, 2] <- as.character(tree.10$frame[1, "var"])
-  records[i, 3] <- as.character(tree.10$frame[4, "var"])
-  records[i, 4] <- summary(tree.10)$misclass[1] / summary(tree.10)$misclass[2]
-  records[i, 5] <- length(summary(tree.10)$used)
-  records[i, 6] <- summary(tree.10)$size
-}
-
-# Simulation with the lowest misclassification rate
-sim <- which(records[, "misclass"] == min(records[, "misclass"]))
-ind <- indices[, sim]
-sample.train <- sample_complete[-ind, ]
-sample.test <- sample_complete[ind, ]
-tree.opts <- tree.control(nrow(sample.train), 
-                          minsize = 5, 
-                          mindev = 1e-5)
-cp_oppose.tree <- tree(cp_oppose ~ . -cp_oppose,
-                       data = sample.train, 
-                       control = tree.opts)
-cp_oppose.tree.10 <- prune.tree(cp_oppose.tree, 
-                                best = 10)
-draw.tree(cp_oppose.tree.10, 
-          nodeinfo = TRUE,
-          print.levels = TRUE,
-          cex = 0.5)
-
-# .. Random forest approach ####
-# Opposition to carbon pricing
-set.seed(1509)
-cp_oppose.rf <- randomForest(cp_oppose ~ . -cp_oppose,
-                   data = sample_complete, 
-                   importance = TRUE,
-                   ntree = 1000)
-cp_oppose.rf
-cp_oppose.varimp <- varImp(cp_oppose.rf)
-cp_oppose.varimp$var <- rownames(cp_oppose.varimp)
-varImpPlot(cp_oppose.rf, cex = 0.7)
-
-# Support for carbon pricing
-vars <- vars[-which(vars == "cp_oppose" | vars == "conservative")]
-vars <- c(vars, c("cp_support", "liberal"))
-
-sample_complete <- sample %>%
-  select(all_of(vars)) %>%
-  drop_na
-
-set.seed(1509)
-cp_support.rf <- randomForest(cp_support ~ . -cp_support,
-                   data = sample_complete, 
-                   importance = TRUE,
-                   ntree = 1000)
-cp_support.rf
-cp_support.varimp <- varImp(cp_support.rf)
-cp_support.varimp$var <- rownames(cp_support.varimp)
-varImpPlot(cp_support.rf, cex = 0.7)
-
-
-# .. Create variable importance plot ####
-# Oppose
-g <- ggplot(cp_oppose.varimp %>%
-              select(var, Oppose),
-            aes(x = fct_reorder(var, Oppose), y = Oppose)) +
-  geom_segment(aes(xend = var, y = 0, yend = Oppose), color = "#00B0F6") +
-  geom_point(size = 4, color = "#00B0F6") +
-  theme(axis.text = element_text(size = 20)) +
-  coord_flip() +
-  labs(title = "Variable importance",
-       subtitle = "Predicting opposition to carbon pricing",
-       x = "", y = "Mean decrease in accuracy")
-ggsave(g,
-       file = here("Figures", "varimp_oppose.png"),
-       width = 6, height = 5, units = "in")
-
-# Support
-g <- ggplot(cp_support.varimp %>%
-         rename(Oppose = 1) %>%
-         select(var, Oppose),
-       aes(x = fct_reorder(var, Oppose), y = Oppose)) +
-  geom_segment(aes(xend = var, y = 0, yend = Oppose), color = "#FFD84D") +
-  geom_point(size = 4, color = "#FFD84D") +
-  theme(axis.text = element_text(size = 20)) +
-  coord_flip() +
-  labs(title = "Variable importance",
-       subtitle = "Predicting support for carbon pricing",
-       x = "", y = "Mean decrease in accuracy")
-ggsave(g,
-       file = here("Figures", "varimp_support.png"),
-       width = 6, height = 5, units = "in")
-
-
-
-## ## ## ## ## ## ## ## ## ## ##
-# PCA                       ####
-## ## ## ## ## ## ## ## ## ## ##
-
-# .. Select features ####
-miss <- panel %>%
-  miss_var_summary() %>%
-  arrange(desc(pct_miss))
-
-miss7 <- panel %>%
-  filter(wave == "wave7") %>%
-  miss_var_summary() %>%
-  arrange(desc(pct_miss))
-
-table(panel$bill_heatingoil_num, panel$wave, useNA = "ifany")
-panel %>%
-  select(bill_heatingoil_num) %>%
-  drop_na %>%
-  nrow
-# 20
-# Can't use the heating oil variables
-
-table(panel$km_driven_23, panel$wave, useNA = "ifany")
-panel %>%
-  select(km_driven_23) %>%
-  drop_na %>%
-  nrow
-# 469
-panel %>%
-  select(km_driven_23, wave) %>%
-  drop_na %>%
-  group_by(wave) %>%
-  tally
-# This is all wave 7
-
-table(panel$familiar_bills_3, panel$wave, useNA = "ifany")
-# No missing, all wave 7
-
-table(panel$bill_diesel_13, panel$wave, useNA = "ifany")
-# No missing, all wave 1
-
-panel %>%
-  select(bill_diesel_num, wave) %>%
-  drop_na %>%
-  group_by(wave) %>%
-  tally
-# wave      n
-# <fct> <int>
-# 1 wave6   915
-# 2 wave7   930
-
-table(panel$inc_heat_perceived_6, panel$wave, useNA = "ifany")
-# No missing, data for waves 1, 4, 6, and 7
-
-panel %>%
-  select(inc_heat_perceived_num, wave) %>%
-  drop_na %>%
-  group_by(wave) %>%
-  tally
-# <fct> <int>
-# 1 wave6   915
-# 2 wave7   576
-
-select_features <- c(
-                     "conservative",
-                     "liberal",
-                     "female",
-                     "french",
-                     "bachelors",
-                     "income_num_mid",
-                     "rural",
-                     "owner",
-                     # "home_size_num",
-                     "vehicle_num",
-                     "drive",
-                     # "km_driven_num",
-                     "left_right_num",
-                     "inc_heat_perceived_num",
-                     "inc_gas_perceived_num",
-                     "inc_overall_perceived_num",
-                     "gasprice_change_perceived_num",
-                     # "gasprice_change_jan_perceived_num",
-                     "fossil_home",
-                     # "renewable_home",
-                     # "fossil_water",
-                     # "renewable_water",
-                     # "fossil_stove",
-                     # "renewable_stove"
-                     # "bill_elec_winter_num_mid",
-                     # "bill_elec_summer_num_mid",
-                     "bill_elec_num",
-                     # "bill_natgas_winter_num_mid",
-                     # "bill_natgas_summer_num_mid",
-                     # "bill_natgas_num",
-                     # "bill_heatingoil_winter_num_mid",
-                     # "bill_heatingoil_num",
-                     # "bill_diesel_num_mid",
-                     "bill_diesel_num"
-                     )
-
-select_labels <- c("cp_support",
-                   "cp_oppose",
-                   "cp_strongsupport",
-                   "cp_strongoppose",
-                   "party_9")
-
-sample_pca <- panel %>%
-  select(all_of(c(select_features, select_labels))) %>%
-  mutate_at(vars(c(select_features)), ~bin_to_num(.)) %>%
-  drop_na()
-
-
-# .. Estimate principal components ####
-pca <- prcomp(sample_pca[, !names(sample_pca) %in% select_labels], 
-              scale = TRUE, center = TRUE)
-summary(pca)
-
-# Extract loadings from PC1
-PC1 <- pca$rotation[, 1]
-sort(abs(PC1), decreasing = T)
-
-# Extract loadings from PC2
-PC2 <- pca$rotation[, 2]
-sort(abs(PC2), decreasing = T)
-
-
-# .. Biplots ####
-g <- ggbiplot(pca,
-         groups = sample_pca$cp_support,
-         ellipse = TRUE,
-         alpha = 0.5,
-         varname.size = 8) +
-  scale_color_manual(name = "Carbon pricing",
-                     labels = c("Oppose",
-                                "Support"),
-                     values = c("#00B0F6", "#FFD84D")) +
-  labs(title = "Principal components of support for carbon pricing") +
-  theme(legend.text = element_text(size = 20))
-g
-ggsave(g,
-       file = here("Figures", "biplot_support_12.png"),
-       width = 6, height = 4, units = "in")
-
-g <- ggbiplot(pca,
-         groups = sample_pca$cp_oppose,
-         ellipse = TRUE,
-         alpha = 0.5,
-         varname.size = 8) +
-  scale_color_manual(name = "Carbon pricing",
-                     labels = c("Support",
-                                "Oppose"),
-                     values = c("#FFD84D", "#00B0F6")) +
-  labs(title = "Principal components of opposition to carbon pricing") +
-  theme(legend.text = element_text(size = 20))
-g
-ggsave(g,
-       file = here("Figures", "biplot_oppose_12.png"),
-       width = 6, height = 4, units = "in")
-
-ggbiplot(pca,
-         groups = sample_pca$cp_strongsupport,
-         ellipse = TRUE,
-         alpha = 0.5)
-ggbiplot(pca,
-         groups = sample_pca$cp_strongoppose,
-         ellipse = TRUE,
-         alpha = 0.5)
-ggbiplot(pca,
-         groups = sample_pca$party_9,
-         ellipse = TRUE,
-         alpha = 0.5)
-
-# Plot other PCs
-ggbiplot(pca,
-         choices = c(1, 3),
-         groups = sample_pca$cp_oppose,
-         ellipse = TRUE,
-         alpha = 0.5)
-ggbiplot(pca,
-         choices = c(3, 4),
-         groups = sample_pca$cp_oppose,
-         ellipse = TRUE,
-         alpha = 0.5)
-
-
-# .. Hierarchical clustering ####
-# Compute Euclidean distance matrix
-dist2 <- dist(sample_pca[, !names(sample_pca) %in% select_labels], method = "euclidean")
-
-# Perform hierarchical clustering with complete linkage
-set.seed(1509)
-hclust <- hclust(dist2, method = "complete")
-
-# Plot dendogram colored by 2 clusters
-dend1 <- as.dendrogram(hclust)
-dend1 <- color_branches(dend1, k = 2)
-dend1 <- color_labels(dend1, k = 2)
-dend1 <- set(dend1, "labels_cex", 0.5)
-dend1 <- set_labels(dend1, 
-                    labels = sample_pca$cp_oppose[order.dendrogram(dend1)])
-plot(dend1)
-
-
-
-## ## ## ## ## ## ## ## ## ## ##
-# COSTS PERCEPTIONS         ####
+# PERCEPTIONS OF COSTS      ####
 ## ## ## ## ## ## ## ## ## ## ##
 
 sample <- panel %>% 
@@ -1513,16 +1409,16 @@ stargazer(fit5a, fit6a, fit7a,
           out = here("Results", "perceived_overall_costs.txt"))
 
 stargazer(fit5a,
-          fit5b,
-          fit5c,
+          fit6a,
+          fit7a,
           type = "latex", style = "ajps",
           title = "Determinants of the perceptions of the costs of carbon pricing",
-          dep.var.labels = c("Increase in gasoline costs", "Increase in heating costs", "Increase in overall costs"),
+          dep.var.labels = c("Gasoline costs", "Heating costs", "Overall costs"),
           covariate.labels = c("Conservative (dummy)",
                                "Household income",
                                "Household bills: Somewhat familiar", "Household bills: Very familiar",
                                "Number of vehicles owned",
-                               "Drives to work",
+                               "Drives to work (dummy)",
                                "Yearly kilometers driven",
                                "Rural (dummy)",
                                "Perceived increase in gas prices (cents/liter)",
@@ -1530,5 +1426,193 @@ stargazer(fit5a,
                                "Home size (square ft.)",
                                "Home heating is fossil fuels (dummy)"),
                                # model.numbers = FALSE,
-                               keep.stat = c("n", "adj.rsq", "f"))
+          # multicolumn = FALSE,
+          keep.stat = c("n", "adj.rsq"))
+
+
+
+## ## ## ## ## ## ## ## ## ## ##
+# CLASSIFICATION TREES      ####
+## ## ## ## ## ## ## ## ## ## ##
+
+# .. Prep the data ####
+vars <- c(
+  "cp_oppose",
+  "bachelors",
+  "income_num_mid",
+  "rural",
+  # "left_right_num",
+  "conservative",
+  # "inc_heat_perceived_num",
+  "inc_gas_perceived_num",
+  "inc_overall_perceived_num",
+  "gasprice_change_perceived_num",
+  "owner",
+  # "home_size_num",
+  "fossil_home",
+  "fossil_water",
+  "fossil_stove",
+  "drive",
+  "vehicle_num"
+  # "km_driven_num"
+)
+
+# Subset data to obtain complete cases for the variables in the model
+sample_complete <- sample %>%
+  select(all_of(vars)) %>%
+  drop_na
+
+# Data manip
+sample_complete <- sample_complete %>%
+  mutate_at(vars(bachelors, rural, conservative,
+                 owner, fossil_home, fossil_water, fossil_stove,
+                 drive),
+            ~bin_to_num(.))
+
+levels(sample_complete$cp_oppose) <- c("Support", "Oppose")
+
+
+# .. Randomly split data into training and test sets ####
+set.seed(1509)
+test.indices <- sample(1:nrow(sample_complete), round(nrow(sample_complete)*0.2))
+sample.train <- sample_complete[-test.indices, ]
+sample.test <- sample_complete[test.indices, ]
+
+
+# .. Use the tree package ####
+# Set tree controls
+tree.opts <- tree.control(nrow(sample.train), 
+                          minsize = 5, 
+                          mindev = 1e-5)
+
+# Grow the tree
+set.seed(1509)
+cp_oppose.tree <- tree(cp_oppose ~ . -cp_oppose,
+                       data = sample.train, 
+                       control = tree.opts)
+
+# Perform cost-complexity pruning
+cp_oppose.tree.10 <- prune.tree(cp_oppose.tree, 
+                                best = 10)
+
+# Draw tree with tree package
+dev.off()
+draw.tree(cp_oppose.tree.10, 
+          nodeinfo = TRUE,
+          print.levels = TRUE,
+          cex = 0.7)
+pdf(here("Figures", "classification_tree.pdf"))
+dev.off()
+
+
+# .. Simulate 1,000 trees to obtain most important variable ####
+# Set up records to collect top variable
+nsims <- 1000
+records <- matrix(NA, ncol = 6, nrow = nsims)
+colnames(records) <- c("simulation", "variable", 
+                       "2nd var", "misclass", "used", "size")
+indices <- matrix(NA, ncol = nsims, nrow = nrow(sample.test))
+
+set.seed(1509)
+i <- 1
+for (i in 1:nsims){
+  test.indices <- sample(1:nrow(sample_complete), round(nrow(sample_complete)*0.2))
+  sample.train <- sample_complete[-test.indices, ]
+  sample.test <- sample_complete[test.indices, ]
+  indices[, i] <- test.indices
+  
+  tree <- NULL
+  tree <- tree(cp_oppose ~ . -cp_oppose,
+               data = sample.train, 
+               control = tree.opts)
+  tree.10 <- prune.tree(tree, 
+                        best = 10)
+  records[i, 1] <- i
+  records[i, 2] <- as.character(tree.10$frame[1, "var"])
+  records[i, 3] <- as.character(tree.10$frame[4, "var"])
+  records[i, 4] <- summary(tree.10)$misclass[1] / summary(tree.10)$misclass[2]
+  records[i, 5] <- length(summary(tree.10)$used)
+  records[i, 6] <- summary(tree.10)$size
+}
+
+# Simulation with the lowest misclassification rate
+sim <- which(records[, "misclass"] == min(records[, "misclass"]))
+ind <- indices[, sim]
+sample.train <- sample_complete[-ind, ]
+sample.test <- sample_complete[ind, ]
+tree.opts <- tree.control(nrow(sample.train), 
+                          minsize = 5, 
+                          mindev = 1e-5)
+cp_oppose.tree <- tree(cp_oppose ~ . -cp_oppose,
+                       data = sample.train, 
+                       control = tree.opts)
+cp_oppose.tree.10 <- prune.tree(cp_oppose.tree, 
+                                best = 10)
+draw.tree(cp_oppose.tree.10, 
+          nodeinfo = TRUE,
+          print.levels = TRUE,
+          cex = 0.5)
+
+# .. Random forest approach ####
+# Opposition to carbon pricing
+set.seed(1509)
+cp_oppose.rf <- randomForest(cp_oppose ~ . -cp_oppose,
+                             data = sample_complete, 
+                             importance = TRUE,
+                             ntree = 1000)
+cp_oppose.rf
+cp_oppose.varimp <- varImp(cp_oppose.rf)
+cp_oppose.varimp$var <- rownames(cp_oppose.varimp)
+varImpPlot(cp_oppose.rf, cex = 0.7)
+
+# Support for carbon pricing
+vars <- vars[-which(vars == "cp_oppose" | vars == "conservative")]
+vars <- c(vars, c("cp_support", "liberal"))
+
+sample_complete <- sample %>%
+  select(all_of(vars)) %>%
+  drop_na
+
+set.seed(1509)
+cp_support.rf <- randomForest(cp_support ~ . -cp_support,
+                              data = sample_complete, 
+                              importance = TRUE,
+                              ntree = 1000)
+cp_support.rf
+cp_support.varimp <- varImp(cp_support.rf)
+cp_support.varimp$var <- rownames(cp_support.varimp)
+varImpPlot(cp_support.rf, cex = 0.7)
+
+
+# .. Create variable importance plot ####
+# Oppose
+g <- ggplot(cp_oppose.varimp %>%
+              select(var, Oppose),
+            aes(x = fct_reorder(var, Oppose), y = Oppose)) +
+  geom_segment(aes(xend = var, y = 0, yend = Oppose), color = "#00B0F6") +
+  geom_point(size = 4, color = "#00B0F6") +
+  theme(axis.text = element_text(size = 20)) +
+  coord_flip() +
+  labs(title = "Variable importance",
+       subtitle = "Predicting opposition to carbon pricing",
+       x = "", y = "Mean decrease in accuracy")
+ggsave(g,
+       file = here("Figures", "varimp_oppose.png"),
+       width = 6, height = 5, units = "in")
+
+# Support
+g <- ggplot(cp_support.varimp %>%
+              rename(Oppose = 1) %>%
+              select(var, Oppose),
+            aes(x = fct_reorder(var, Oppose), y = Oppose)) +
+  geom_segment(aes(xend = var, y = 0, yend = Oppose), color = "#FFD84D") +
+  geom_point(size = 4, color = "#FFD84D") +
+  theme(axis.text = element_text(size = 20)) +
+  coord_flip() +
+  labs(title = "Variable importance",
+       subtitle = "Predicting support for carbon pricing",
+       x = "", y = "Mean decrease in accuracy")
+ggsave(g,
+       file = here("Figures", "varimp_support.png"),
+       width = 6, height = 5, units = "in")
 

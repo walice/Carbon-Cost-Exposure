@@ -394,12 +394,12 @@ viz <- panel %>%
             cp_strongoppose = mean(bin_to_num(cp_strongoppose),
                                    na.rm = TRUE)) %>%
   mutate(income_6 = fct_relevel(income_6,
-                                "Less than 20,000",
-                                "20,000-40,000",
-                                "40,000-60,000",
-                                "60,000-80,000",
-                                "80,000-100,000",
-                                "100,000 and over")) %>%
+                                "Less than $20,000",
+                                "$20,000-$40,000",
+                                "$40,000-$60,000",
+                                "$60,000-$80,000",
+                                "$80,000-$100,000",
+                                "$100,000 and over")) %>%
   melt(id.vars = "income_6")
 
 ggplot(data = viz,

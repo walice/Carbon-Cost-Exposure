@@ -875,15 +875,15 @@ table(panel$wave, panel$income_num_mid, useNA = "ifany")
 
 # Create household income variable with 6 levels
 panel <- panel %>%
-  mutate(income_6 = case_when(income_10 == "Under $20,000" ~ "Less than 20,000",
-                              income_10 == "$20,000-$39,999" ~ "20,000-40,000",
-                              income_10 == "$40,000-$59,999" ~ "40,000-60,000",
-                              income_10 == "$60,000-$79,999" ~ "60,000-80,000",
-                              income_10 == "$80,000-$99,999" ~ "80,000-100,000",
-                              income_10 == "$100,000-$119,999" ~ "100,000 and over",
-                              income_10 == "$120,000-$159, 999" ~ "100,000 and over",
-                              income_10 == "$160,000-$199,999" ~ "100,000 and over",
-                              income_10 == "$200,000 or more" ~ "100,000 and over")) %>%
+  mutate(income_6 = case_when(income_10 == "Under $20,000" ~ "Less than $20,000",
+                              income_10 == "$20,000-$39,999" ~ "$20,000-$40,000",
+                              income_10 == "$40,000-$59,999" ~ "$40,000-$60,000",
+                              income_10 == "$60,000-$79,999" ~ "$60,000-$80,000",
+                              income_10 == "$80,000-$99,999" ~ "$80,000-$100,000",
+                              income_10 == "$100,000-$119,999" ~ "$100,000 and over",
+                              income_10 == "$120,000-$159, 999" ~ "$100,000 and over",
+                              income_10 == "$160,000-$199,999" ~ "$100,000 and over",
+                              income_10 == "$200,000 or more" ~ "$100,000 and over")) %>%
   mutate(income_6 = as.factor(income_6))
 summary(panel$income_6)
 # 100,000 and over    20,000-40,000    40,000-60,000    60,000-80,000   80,000-100,000 Less than 20,000 
