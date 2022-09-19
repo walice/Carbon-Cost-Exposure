@@ -1,5 +1,5 @@
 # Carbon-Cost-Exposure
-Analyzing the material vs. ideological basis of opposition to carbon pricing
+***Analyzing the material vs. ideological basis of opposition to carbon pricing***
 
 
 ### To replicate results and figures
