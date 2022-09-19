@@ -2,11 +2,11 @@
 
 cd ~/work
 
-curl -L -o Data_rep.zip https://www.dropbox.com/sh/9rcid737t5itegm/AABUO6g0exmkrawBL1skqnE8a?dl=1
+curl -L -o Data.zip https://www.dropbox.com/sh/pphd24hgzm6h7im/AAA0ndgbZU-79RNl_nJ-KiGta?dl=1
 
-unzip ~/work/Data_rep.zip -d ~/work/Data_rep
+unzip ~/work/Data.zip -d ~/work/Data
 
-mkdir ~/work/Results_rep/ ~/work/Figures_rep/
+mkdir ~/work/Results/ ~/work/Figures/
 
 chmod u+x replicate.sh
 ./replicate.sh
