@@ -9,7 +9,7 @@ Clone this repository and run `postBuild.sh`. This script will create folders fo
 git clone https://github.com/walice/Carbon-Cost-Exposure.git
 cd Carbon-Cost-Exposure
 chmod u+x postBuild.sh
-./postBuid.sh
+./postBuild.sh
 ```
 
 ### To replicate the computational environment
@@ -43,7 +43,7 @@ Finally, run `postBuild.sh` as described above.
 
 ```
 chmod u+x postBuild.sh
-./postBuid.sh
+./postBuild.sh
 ```
 
 
