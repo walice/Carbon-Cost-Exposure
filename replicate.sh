@@ -1,7 +1,6 @@
 #!/bin/bash
 
 Rscript Scripts/DataPreparation.R
-rm Rplots.pdf
 echo "The relevant variables have been merged and cleaned."
 
 Rscript Scripts/ExploratoryDataAnalysis.R
