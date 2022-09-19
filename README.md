@@ -1,6 +1,8 @@
 # Carbon-Cost-Exposure
 ***Analyzing the material vs. ideological basis of opposition to carbon pricing***
 
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/walice/Carbon-Cost-Exposure/HEAD)
+
 
 ### To replicate results and figures
 Clone this repository and run `postBuild.sh`. This script will create folders for *Data*, *Figures* and *Results*, download the raw data, and then execute the script `replicate.sh` to generate the figures and results.
