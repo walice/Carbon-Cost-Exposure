@@ -793,7 +793,7 @@ imput <- left_join(miss7 %>%
   arrange(desc(pct_miss_change)) %>%
   mutate(variable = as.factor(variable)) %>%
   mutate(variable = fct_reorder(variable,
-                                pct_miss_change,
+                                as.numeric(pct_miss_change),
                                 .desc = TRUE))
 
 ggplot(data = imput %>%
