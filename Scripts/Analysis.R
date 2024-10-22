@@ -965,16 +965,21 @@ g <- ggbiplot(pca,
               ellipse = TRUE,
               alpha = 0.3,
               varname.size = 8) +
-  scale_color_manual(name = "Carbon pricing",
-                     labels = c("Support",
-                                "Oppose"),
+  scale_color_manual(name = "Survey respondent who:",
+                     labels = c("(strongly) supports carbon pricing",
+                                "(strongly) opposes carbon pricing"),
                      values = c("#FFD84D", "#00B0F6")) +
-  labs(title = "Principal components of opposition to carbon pricing") +
-  theme(legend.text = element_text(size = 20))
+  labs(title = "Predictors of opposition to carbon pricing") +
+  xlab("PC #1 (explains 15.1% of variation)") +
+  ylab("PC #2 (explains 9.2% of variation)") +
+  theme(legend.text = element_text(size = 20),
+        legend.position = "bottom") +
+  guides(color = guide_legend(ncol = 1, 
+                              override.aes = list(linetype = 0)))
 g
 ggsave(g,
        file = here("Figures", "biplot_oppose_12.png"),
-       width = 6, height = 4, units = "in")
+       width = 7, height = 5, units = "in")
 
 ggbiplot(pca,
          groups = sample_pca$cp_strongsupport,
