@@ -1,4 +1,3 @@
-version: '3'
 services:
   notebook:
     image: alicesoto/carbon-cost-exposure:${TAG:-latest}
