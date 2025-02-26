@@ -1,10 +1,10 @@
 version: '3'
 services:
   notebook:
+    image: alicesoto/carbon-cost-exposure:${TAG:-latest}
     build:
       context: ./
       dockerfile: Dockerfile
-    image: alicesoto/carbon-cost-exposure:${TAG:-latest}
     volumes:
       - ${HOST_DIR}:/home/jovyan/work
       - ${CERT_DIR}:/etc/ssl/notebook
