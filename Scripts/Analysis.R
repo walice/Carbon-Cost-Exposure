@@ -2,6 +2,7 @@
 # Analysis
 # Alice Lepissier
 # alice_lepissier@brown.edu
+# alice.lepissier@gmail.com
 
 ## ## ## ## ## ## ## ## ## ## ##
 # INDEX                     ####
