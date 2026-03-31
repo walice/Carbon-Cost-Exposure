@@ -1,6 +1,6 @@
 services:
   notebook:
-    image: alicesoto/carbon-cost-exposure:${TAG:-latest}
+    image: walice/carbon-cost-exposure:${TAG:-latest}
     build:
       context: ./
       dockerfile: Dockerfile

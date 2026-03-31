@@ -1,1 +1,1 @@
-docker pull alicesoto/carbon-cost-exposure:latest
+docker pull walice/carbon-cost-exposure:latest
