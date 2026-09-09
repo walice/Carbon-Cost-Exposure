@@ -14,6 +14,9 @@ chmod u+x postBuild.sh
 ./postBuild.sh
 ```
 
+### Minimal replication package (Harvard Dataverse)
+The `replication/` folder is a self-contained package that reproduces every table and figure in the published article from the harmonised panel (`panel_vars.rds`, distributed through the Dataverse archive rather than git). See `replication/README.md` for the output-to-article mapping and notes on the analysis samples.
+
 ### To replicate the computational environment
 If you use Docker, you can use the `Dockerfile` and `docker-compose.yml` which are included in this repo to emulate the computational environment that was used to perform this analysis. These files will allow you to build an image which includes all the required dependencies and packages.
 
