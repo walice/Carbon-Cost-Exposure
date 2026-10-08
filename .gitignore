@@ -8,3 +8,12 @@
 Data*
 Figures*
 Results*
+
+# Replication package (replication/): code is tracked; the data and generated
+# outputs are distributed through the Harvard Dataverse archive, not git.
+!replication/data/
+replication/data/*
+!replication/data/codebook.csv
+!replication/data/README.md
+replication/data/derived/
+replication/output/

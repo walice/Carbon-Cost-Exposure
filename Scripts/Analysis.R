@@ -1077,6 +1077,23 @@ stargazer(fit0a,
 # Choose fit0a - work with cp_oppose
 
 
+# .. As a robustness check, fit base model with logit instead
+
+fit0a_logit <- glm(bin_to_num(cp_oppose) ~ edu_5 + income_6 + rural +
+                     left_right_num + conservative, 
+                   data = sample,
+                   family = binomial(link = "logit"))
+
+# View results
+summary(fit0a_logit)
+nobs(fit0a_logit)
+
+# Get AMEs to compare against LPM coefficients
+library(margins)
+
+# Get average marginal effects (AME) - comparable to LPM coefficients
+summary(margins(fit0a_logit))
+
 # .. Regress support for carbon pricing on perceived costs ####
 fit1a <- lm(bin_to_num(cp_oppose) ~ edu_5 + income_6 + rural + 
               left_right_num + conservative +
@@ -1553,6 +1570,20 @@ draw.tree(cp_oppose.tree.10,
 jpeg(here("Figures", "classification_tree.jpg"))
 dev.off()
 
+# .. Calculate final out of sample predictive accuracy
+
+# Make predictions on the test set
+cp_oppose.pred <- predict(cp_oppose.tree.10, 
+                          newdata = sample.test, 
+                          type = "class")
+
+# Calculate accuracy
+accuracy <- mean(cp_oppose.pred == sample.test$cp_oppose)
+
+# Print results
+round(accuracy * 100, 2)
+
+
 
 # .. Simulate 1,000 trees to obtain most important variable ####
 # Set up records to collect top variable
@@ -1634,34 +1665,506 @@ varImpPlot(cp_support.rf, cex = 0.7)
 
 
 # .. Create variable importance plot ####
+
+# Clean variable name labels for figures
+varimp_labels <- c(
+  conservative              = "Conservative voter",
+  liberal                   = "Liberal voter",
+  inc_overall_perceived_num = "Perc. overall energy cost increase",
+  inc_gas_perceived_num     = "Perc. gas cost increase ($/mo)",
+  gasprice_change_perceived_num = "Perc. gas price change (cents/L)",
+  fossil_home               = "Home heating: fossil fuels",
+  fossil_water              = "Water heating: fossil fuels",
+  fossil_stove              = "Fossil fuel stove",
+  bill_diesel_num           = "Monthly gasoline/diesel bill",
+  bill_elec_num             = "Monthly electricity bill",
+  vehicle_num               = "Number of vehicles owned",
+  drive                     = "Drives to work",
+  rural                     = "Rural residence",
+  bachelors                 = "Bachelor's degree or higher",
+  owner                     = "Home owner",
+  income_num_mid            = "Household income (midpoint)",
+  home_size_num             = "Home size (sq. ft.)"
+)
+
+# Helper: apply labels, leaving any unmapped vars as-is
+apply_labels <- function(df) {
+  df$var_label <- ifelse(df$var %in% names(varimp_labels),
+                         varimp_labels[df$var],
+                         df$var)
+  df
+}
+
 # Oppose
 g <- ggplot(cp_oppose.varimp %>%
-              select(var, Oppose),
-            aes(x = fct_reorder(var, Oppose), y = Oppose)) +
-  geom_segment(aes(xend = var, y = 0, yend = Oppose), color = "#00B0F6") +
+              select(var, Oppose) %>%
+              apply_labels(),
+            aes(x = fct_reorder(var_label, Oppose), y = Oppose)) +
+  geom_segment(aes(xend = var_label, y = 0, yend = Oppose), color = "#00B0F6") +
   geom_point(size = 4, color = "#00B0F6") +
-  theme(axis.text = element_text(size = 20)) +
+  theme_minimal(base_size = 12) +
+  theme(axis.text.y = element_text(size = 11)) +
   coord_flip() +
   labs(title = "Variable importance",
        subtitle = "Predicting opposition to carbon pricing",
        x = "", y = "Mean decrease in accuracy")
 ggsave(g,
        file = here("Figures", "varimp_oppose.png"),
-       width = 6, height = 5, units = "in")
+       width = 7, height = 5, units = "in")
 
-# Support
+# Support (varImp returns columns "Oppose" and "Support"; use "Support" column directly)
 g <- ggplot(cp_support.varimp %>%
-              rename(Oppose = 1) %>%
-              select(var, Oppose),
-            aes(x = fct_reorder(var, Oppose), y = Oppose)) +
-  geom_segment(aes(xend = var, y = 0, yend = Oppose), color = "#FFD84D") +
+              select(var, imp = Support) %>%
+              apply_labels(),
+            aes(x = fct_reorder(var_label, imp), y = imp)) +
+  geom_segment(aes(xend = var_label, y = 0, yend = imp), color = "#FFD84D") +
   geom_point(size = 4, color = "#FFD84D") +
-  theme(axis.text = element_text(size = 20)) +
+  theme_minimal(base_size = 12) +
+  theme(axis.text.y = element_text(size = 11)) +
   coord_flip() +
   labs(title = "Variable importance",
        subtitle = "Predicting support for carbon pricing",
        x = "", y = "Mean decrease in accuracy")
 ggsave(g,
        file = here("Figures", "varimp_support.png"),
-       width = 6, height = 5, units = "in")
+       width = 7, height = 5, units = "in")
+
+
+
+## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ##
+# ROBUSTNESS: NO IMPUTATION             ####
+## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ##
+# Re-estimate M1-M4 using only Wave 7 native responses
+# (no values carried forward from Wave 1 or Wave 6)
+# This addresses Reviewer 1 Point 6
+
+# Load the pre-imputation data
+load(here("Data", "Processed", "panel_vars.Rdata"))
+panel_noimp <- panel_vars
+rm(panel_vars)
+
+# Apply the same transformations as in the main analysis
+# (releveling factors, creating collapsed 4-level perception categories)
+panel_noimp <- panel_noimp %>%
+  mutate(edu_5 = fct_relevel(edu_5,
+                             "Less than high school",
+                             "High school",
+                             "Some college",
+                             "College",
+                             "Graduate or prof. degree"),
+         income_6 = fct_relevel(income_6,
+                                "Less than $20,000",
+                                "$20,000-$40,000",
+                                "$40,000-$60,000",
+                                "$60,000-$80,000",
+                                "$80,000-$100,000",
+                                "$100,000 and over"),
+         inc_heat_perceived_6 = fct_relevel(inc_heat_perceived_6,
+                                            "$0 per month",
+                                            "$1-$24 per month",
+                                            "$25-$49 per month" ,
+                                            "$50-$99 per month",
+                                            "$100 or more per month",
+                                            "I don't know"),
+         inc_gas_perceived_6 = fct_relevel(inc_gas_perceived_6,
+                                           "$0 per month",
+                                           "$1-$24 per month",
+                                           "$25-$49 per month" ,
+                                           "$50-$99 per month",
+                                           "$100 or more per month",
+                                           "I don't know"))
+
+# Create collapsed 4-level perception factors
+panel_noimp <- panel_noimp %>%
+  mutate(inc_heat_perceived_4 = case_when(inc_heat_perceived_6 == "$0 per month" |
+                                            inc_heat_perceived_6 == "I don't know" ~
+                                            "$0 per month",
+                                          inc_heat_perceived_6 == "$1-$24 per month" |
+                                            inc_heat_perceived_6 == "$25-$49 per month" ~
+                                            "$1-$50 per month",
+                                          inc_heat_perceived_6 == "$50-$99 per month" ~
+                                            "$50-$99 per month",
+                                          inc_heat_perceived_6 == "$100 or more per month" ~
+                                            "$100 or more per month"),
+         inc_gas_perceived_4 = case_when(inc_gas_perceived_6 == "$0 per month" |
+                                           inc_gas_perceived_6 == "I don't know" ~
+                                            "$0 per month",
+                                         inc_gas_perceived_6 == "$1-$24 per month" |
+                                           inc_gas_perceived_6 == "$25-$49 per month" ~
+                                            "$1-$50 per month",
+                                         inc_gas_perceived_6 == "$50-$99 per month" ~
+                                            "$50-$99 per month",
+                                         inc_gas_perceived_6 == "$100 or more per month" ~
+                                            "$100 or more per month")) %>%
+  mutate(inc_heat_perceived_4 = as.factor(inc_heat_perceived_4),
+         inc_gas_perceived_4 = as.factor(inc_gas_perceived_4))
+panel_noimp <- panel_noimp %>%
+  mutate(inc_heat_perceived_4 = fct_relevel(inc_heat_perceived_4,
+                                            "$0 per month",
+                                            "$1-$50 per month",
+                                            "$50-$99 per month",
+                                            "$100 or more per month"),
+         inc_gas_perceived_4 = fct_relevel(inc_gas_perceived_4,
+                                           "$0 per month",
+                                           "$1-$50 per month",
+                                           "$50-$99 per month",
+                                           "$100 or more per month"))
+
+# Filter to Wave 7 respondents only -- NO imputation
+wave7IDs_noimp <- panel_noimp %>% filter(wave == "wave7") %>% pull(responseid)
+sample_noimp <- panel_noimp %>%
+  filter(responseid %in% wave7IDs_noimp) %>%
+  filter(wave == "wave7")
+
+# M1: Baseline model (demographics + partisanship)
+fit0a_noimp <- lm(bin_to_num(cp_oppose) ~ edu_5 + income_6 + rural +
+                    left_right_num + conservative,
+                  data = sample_noimp)
+summary(fit0a_noimp)
+nobs(fit0a_noimp)
+
+# M2: Perceived costs
+fit1c_noimp <- lm(bin_to_num(cp_oppose) ~ edu_5 + income_6 + rural +
+                    left_right_num + conservative +
+                    inc_heat_perceived_4 + inc_gas_perceived_4 + inc_overall_perceived_num +
+                    gasprice_change_perceived_num,
+                  data = sample_noimp)
+summary(fit1c_noimp)
+nobs(fit1c_noimp)
+
+# M3: Actual costs with interactions
+fit3a_noimp <- lm(bin_to_num(cp_oppose) ~ edu_5 + income_6 + rural +
+                    left_right_num + conservative +
+                    owner + home_size_num +
+                    fossil_home + fossil_water + fossil_stove +
+                    home_size_num * fossil_home +
+                    bill_elec_num + bill_diesel_num +
+                    drive + vehicle_num + km_driven_num +
+                    drive * km_driven_num,
+                  data = sample_noimp)
+summary(fit3a_noimp)
+nobs(fit3a_noimp)
+
+# M4: Full model (perceived + actual costs)
+fit4a_noimp <- lm(bin_to_num(cp_oppose) ~ edu_5 + income_6 + rural +
+                    left_right_num + conservative +
+                    inc_heat_perceived_4 + inc_gas_perceived_4 + inc_overall_perceived_num +
+                    gasprice_change_perceived_num +
+                    owner + home_size_num +
+                    fossil_home + fossil_water + fossil_stove +
+                    home_size_num * fossil_home +
+                    bill_elec_num + bill_diesel_num +
+                    drive + vehicle_num + km_driven_num +
+                    drive * km_driven_num,
+                  data = sample_noimp)
+summary(fit4a_noimp)
+nobs(fit4a_noimp)
+
+# Output results to text file
+stargazer(fit0a_noimp,
+          fit1c_noimp,
+          fit3a_noimp,
+          fit4a_noimp,
+          type = "text",
+          no.space = TRUE,
+          out = here("Results", "pricing_no_imputation.txt"))
+
+# Output LaTeX table for SI
+stargazer(fit0a_noimp,
+          fit1c_noimp,
+          fit3a_noimp,
+          fit4a_noimp,
+          type = "latex", style = "ajps",
+          title = "Determinants of opposition to carbon pricing (no imputation)",
+          dep.var.labels = c("Opposition to carbon pricing"),
+          covariate.labels = c("Education: High school", "Education: Some college", "Education: College", "Education: Graduate",
+                               "Income: 20,000-40,000", "Income: 40,000-60,000", "Income: 60,000-80,000", "Income: 80,000-100,000", "Income: 100,000 and over",
+                               "Rural (dummy)",
+                               "Left-right: 0-1 (1 is far right)",
+                               "Conservative (dummy)",
+                               "Perceived inc. heating: 1-50 per month", "Perceived inc. heating: 50-99 per month", "Perceived inc. heating: 100 or more per month",
+                               "Perceived inc. gas: 1-50 per month", "Perceived inc. gas: 50-99 per month", "Perceived inc. gas: 100 or more per month",
+                               "Perceived increase in overall costs (due to CP)",
+                               "Perceived increase in gas prices (cents/liter)",
+                               "Home owner (dummy)",
+                               "Home size (square ft.)",
+                               "Home heating is fossil fuels (dummy)",
+                               "Water heating is fossil fuels (dummy)",
+                               "Fossil fuel stove (dummy)",
+                               "Monthly electricity bill",
+                               "Monthly gasoline/diesel bill",
+                               "Drives to work (dummy)",
+                               "Number of vehicles owned",
+                               "Yearly kilometers driven",
+                               "Home size * fossil home",
+                               "Drives to work * Kilometers driven"),
+          single.row = TRUE,
+          se = NULL,
+          keep.stat = c("n", "adj.rsq"))
+
+rm(panel_noimp, sample_noimp, wave7IDs_noimp)
+
+
+## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ##
+# ROBUSTNESS: CONSERVATIVE x PERCEIVED COST INTERACTIONS ####
+## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ##
+# Tests whether partisanship moderates the effect of perceived costs
+# on carbon pricing opposition (Reviewer 1, Point 9)
+# Result: Interactions are jointly insignificant (F-test p=0.61 for M2, p=0.91 for M4)
+
+# M2 with interactions: Conservative x all perceived cost variables
+fit1c_int <- lm(bin_to_num(cp_oppose) ~ edu_5 + income_6 + rural +
+                  left_right_num + conservative *
+                  (inc_heat_perceived_4 + inc_gas_perceived_4 + inc_overall_perceived_num +
+                   gasprice_change_perceived_num),
+                data = sample)
+summary(fit1c_int)
+nobs(fit1c_int)
+
+# M4 with interactions: Full model + Conservative x perceived cost interactions
+fit4a_int <- lm(bin_to_num(cp_oppose) ~ edu_5 + income_6 + rural +
+                  left_right_num + conservative *
+                  (inc_heat_perceived_4 + inc_gas_perceived_4 + inc_overall_perceived_num +
+                   gasprice_change_perceived_num) +
+                  owner + home_size_num +
+                  fossil_home + fossil_water + fossil_stove +
+                  home_size_num * fossil_home +
+                  bill_elec_num + bill_diesel_num +
+                  drive + vehicle_num + km_driven_num +
+                  drive * km_driven_num,
+                data = sample)
+summary(fit4a_int)
+nobs(fit4a_int)
+
+# F-tests: Do the interaction terms jointly improve model fit?
+anova(fit1c, fit1c_int)  # M2: p = 0.61
+anova(fit4a, fit4a_int)  # M4: p = 0.91
+
+# Output: side-by-side comparison (original vs interaction) for SI
+stargazer(fit1c, fit1c_int, fit4a, fit4a_int,
+          type = "text", no.space = TRUE,
+          out = here("Results", "pricing_interactions_SI.txt"))
+
+# LaTeX output for SI
+stargazer(fit1c, fit1c_int, fit4a, fit4a_int,
+          type = "latex", style = "ajps",
+          title = "Partisanship--perceived cost interactions (robustness check)",
+          column.labels = c("M2", "M2 + Int.", "M4", "M4 + Int."),
+          dep.var.labels = c("Opposition to carbon pricing"),
+          covariate.labels = c(
+            "Education: High school", "Education: Some college", "Education: College", "Education: Graduate",
+            "Income: 20,000-40,000", "Income: 40,000-60,000", "Income: 60,000-80,000", "Income: 80,000-100,000", "Income: 100,000 and over",
+            "Rural (dummy)",
+            "Left-right: 0-1 (1 is far right)",
+            "Conservative (dummy)",
+            "Perceived inc. heating: 1-50/mo", "Perceived inc. heating: 50-99/mo", "Perceived inc. heating: 100+/mo",
+            "Perceived inc. gas: 1-50/mo", "Perceived inc. gas: 50-99/mo", "Perceived inc. gas: 100+/mo",
+            "Perceived inc. overall costs",
+            "Perceived inc. gas price (cents/L)",
+            "Home owner (dummy)",
+            "Home size (sq. ft.)",
+            "Home heating: fossil fuels",
+            "Water heating: fossil fuels",
+            "Fossil fuel stove",
+            "Monthly electricity bill",
+            "Monthly gasoline/diesel bill",
+            "Drives to work (dummy)",
+            "Number of vehicles",
+            "Yearly km driven",
+            "Home size * fossil home",
+            "Drives to work * Km driven",
+            "Conservative * Heating 1-50/mo",
+            "Conservative * Heating 50-99/mo",
+            "Conservative * Heating 100+/mo",
+            "Conservative * Gas 1-50/mo",
+            "Conservative * Gas 50-99/mo",
+            "Conservative * Gas 100+/mo",
+            "Conservative * Overall costs",
+            "Conservative * Gas price"
+          ),
+          single.row = TRUE, se = NULL,
+          keep.stat = c("n", "adj.rsq"))
+
+rm(fit1c_int, fit4a_int)
+
+
+## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ##
+# SHAPLEY VARIANCE DECOMPOSITION (LMG)    ####
+## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ##
+# Decomposes model R-squared into the contribution of each predictor group,
+# accounting for correlations between predictors (Reviewer 1, Point 7)
+
+library(relaimpo)
+
+# M1: Baseline model
+relimp_m1 <- calc.relimp(fit0a, type = "lmg")
+
+# M2: Perceived costs model
+relimp_m2 <- calc.relimp(fit1c, type = "lmg")
+
+# Clean names for display and figures
+clean_m1 <- c(edu_5 = "Education", income_6 = "Income", rural = "Rural",
+              left_right_num = "Left-Right Ideology", conservative = "Conservative")
+clean_m2 <- c(edu_5 = "Education", income_6 = "Income", rural = "Rural",
+              left_right_num = "Left-Right Ideology", conservative = "Conservative",
+              inc_heat_perceived_4 = "Perc. Heating Cost Increase",
+              inc_gas_perceived_4 = "Perc. Gas Cost Increase",
+              inc_overall_perceived_num = "Perc. Overall Cost Increase",
+              gasprice_change_perceived_num = "Perc. Gas Price Change")
+
+# Save results to text file
+sink(here("Results", "shapley_decomposition.txt"))
+cat("=== SHAPLEY (LMG) VARIANCE DECOMPOSITION ===\n\n")
+
+cat("--- Model 1: Baseline ---\n")
+cat("Total R-squared:", round(relimp_m1@R2, 4), "\n")
+cat("N:", nobs(fit0a), "\n\n")
+cat(sprintf("%-30s %10s %10s\n", "Predictor Group", "R2 Share", "% of R2"))
+cat(paste(rep("-", 52), collapse=""), "\n")
+ord1 <- order(relimp_m1@lmg, decreasing = TRUE)
+for (i in ord1) {
+  nm <- names(relimp_m1@lmg)[i]
+  label <- ifelse(nm %in% names(clean_m1), clean_m1[nm], nm)
+  cat(sprintf("%-30s %10.4f %9.1f%%\n", label,
+              relimp_m1@lmg[i], relimp_m1@lmg[i] / relimp_m1@R2 * 100))
+}
+
+cat("\n\n--- Model 2: Perceived Costs ---\n")
+cat("Total R-squared:", round(relimp_m2@R2, 4), "\n")
+cat("N:", nobs(fit1c), "\n\n")
+cat(sprintf("%-35s %10s %10s\n", "Predictor Group", "R2 Share", "% of R2"))
+cat(paste(rep("-", 57), collapse=""), "\n")
+ord2 <- order(relimp_m2@lmg, decreasing = TRUE)
+for (i in ord2) {
+  nm <- names(relimp_m2@lmg)[i]
+  label <- ifelse(nm %in% names(clean_m2), clean_m2[nm], nm)
+  cat(sprintf("%-35s %10.4f %9.1f%%\n", label,
+              relimp_m2@lmg[i], relimp_m2@lmg[i] / relimp_m2@R2 * 100))
+}
+sink()
+
+# Save figures
+# M1
+m1_shares <- relimp_m1@lmg
+names(m1_shares) <- clean_m1[names(m1_shares)]
+m1_pct <- sort(m1_shares / relimp_m1@R2 * 100, decreasing = FALSE)
+
+png(here("Figures", "shapley_m1.png"), width = 800, height = 500, res = 150)
+par(mar = c(5, 10, 4, 4))
+bp <- barplot(m1_pct, horiz = TRUE, las = 1,
+              main = "Shapley Variance Decomposition\nModel 1: Baseline",
+              xlab = "% of Model R\u00b2 Explained",
+              col = "steelblue", border = NA, xlim = c(0, 75))
+text(m1_pct + 1.5, bp, labels = paste0(round(m1_pct, 1), "%"), cex = 0.8, adj = 0)
+dev.off()
+
+# M2
+m2_shares <- relimp_m2@lmg
+names(m2_shares) <- clean_m2[names(m2_shares)]
+m2_pct <- sort(m2_shares / relimp_m2@R2 * 100, decreasing = FALSE)
+
+png(here("Figures", "shapley_m2.png"), width = 900, height = 600, res = 150)
+par(mar = c(5, 14, 4, 4))
+bp2 <- barplot(m2_pct, horiz = TRUE, las = 1,
+               main = "Shapley Variance Decomposition\nModel 2: Perceived Costs",
+               xlab = "% of Model R\u00b2 Explained",
+               col = "steelblue", border = NA, xlim = c(0, 60))
+text(m2_pct + 1, bp2, labels = paste0(round(m2_pct, 1), "%"), cex = 0.7, adj = 0)
+dev.off()
+
+
+## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ##
+# ROBUSTNESS: PROVINCIAL FIXED EFFECTS   ####
+## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ##
+# Re-estimates M1-M4 adding province dummies (ref = BC)
+# Addresses adversarial critique point #13
+
+library(sandwich)
+library(lmtest)
+
+sample$prov <- relevel(factor(sample$prov), ref = "BC")
+
+fit0a_pfe <- lm(bin_to_num(cp_oppose) ~ edu_5 + income_6 + rural +
+                  left_right_num + conservative + prov, data = sample)
+
+fit1c_pfe <- lm(bin_to_num(cp_oppose) ~ edu_5 + income_6 + rural +
+                  left_right_num + conservative +
+                  inc_heat_perceived_4 + inc_gas_perceived_4 +
+                  inc_overall_perceived_num + gasprice_change_perceived_num +
+                  prov, data = sample)
+
+fit3a_pfe <- lm(bin_to_num(cp_oppose) ~ edu_5 + income_6 + rural +
+                  left_right_num + conservative +
+                  owner + home_size_num + fossil_home + fossil_water + fossil_stove +
+                  home_size_num * fossil_home + bill_elec_num + bill_diesel_num +
+                  drive + vehicle_num + km_driven_num + drive * km_driven_num +
+                  prov, data = sample)
+
+fit4a_pfe <- lm(bin_to_num(cp_oppose) ~ edu_5 + income_6 + rural +
+                  left_right_num + conservative +
+                  inc_heat_perceived_4 + inc_gas_perceived_4 +
+                  inc_overall_perceived_num + gasprice_change_perceived_num +
+                  owner + home_size_num + fossil_home + fossil_water + fossil_stove +
+                  home_size_num * fossil_home + bill_elec_num + bill_diesel_num +
+                  drive + vehicle_num + km_driven_num + drive * km_driven_num +
+                  prov, data = sample)
+
+# Text output
+stargazer(fit0a_pfe, fit1c_pfe, fit3a_pfe, fit4a_pfe,
+          type = "text", no.space = TRUE,
+          out = here("Results", "pricing_province_fe.txt"),
+          keep = c("conservative", "rural", "left_right", "prov",
+                   "inc_heat", "inc_gas", "inc_overall", "gasprice",
+                   "fossil_home", "vehicle_num"),
+          keep.stat = c("n", "adj.rsq"))
+
+# LaTeX output
+stargazer(fit0a_pfe, fit1c_pfe, fit3a_pfe, fit4a_pfe,
+          type = "latex", style = "ajps", no.space = TRUE,
+          title = "Determinants of opposition to carbon pricing (provincial fixed effects)",
+          label = "table:province_fe",
+          column.labels = c("M1", "M2", "M3", "M4"),
+          dep.var.labels = "Opposition to carbon pricing",
+          covariate.labels = c(
+            "Education: High school", "Education: Some college",
+            "Education: College", "Education: Graduate",
+            "Income: 20,000-40,000", "Income: 40,000-60,000",
+            "Income: 60,000-80,000", "Income: 80,000-100,000", "Income: 100,000+",
+            "Rural (dummy)", "Left-right: 0-1 (1 is far right)",
+            "Conservative (dummy)",
+            "Perceived inc. heating: 1-50/mo", "Perceived inc. heating: 50-99/mo",
+            "Perceived inc. heating: 100+/mo",
+            "Perceived inc. gas: 1-50/mo", "Perceived inc. gas: 50-99/mo",
+            "Perceived inc. gas: 100+/mo",
+            "Perceived inc. overall costs", "Perceived inc. gas price (cents/L)",
+            "Home owner", "Home size (sq. ft.)",
+            "Home heating: fossil fuels", "Water heating: fossil fuels",
+            "Fossil fuel stove", "Monthly electricity bill",
+            "Monthly gasoline/diesel bill", "Drives to work",
+            "Number of vehicles", "Yearly km driven",
+            "Province: AB", "Province: ON", "Province: QC", "Province: SK",
+            "Home size * fossil home", "Drives to work * Km driven"
+          ),
+          keep.stat = c("n", "adj.rsq"),
+          out = here("Results", "pricing_province_fe_latex.txt"))
+
+rm(fit0a_pfe, fit1c_pfe, fit3a_pfe, fit4a_pfe)
+
+
+## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ##
+# ROBUSTNESS: CLUSTERED STANDARD ERRORS  ####
+## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ##
+# Re-estimates M1-M4 with SEs clustered by province (5 clusters)
+# Addresses adversarial critique point #12
+
+sink(here("Results", "pricing_clustered_se.txt"))
+cat("=== CLUSTERED STANDARD ERRORS (province-clustered) ===\n\n")
+for (mod_name in c("M1 (fit0a)", "M2 (fit1c)", "M3 (fit3a)", "M4 (fit4a)")) {
+  m <- get(sub(" .*", "", tolower(mod_name)) |>
+             (\(x) switch(x, m1="fit0a", m2="fit1c", m3="fit3a", m4="fit4a"))())
+  cat("---", mod_name, "(N=", nobs(m), ") ---\n")
+  print(round(coeftest(m, vcov = vcovCL(m, cluster = ~prov)), 4))
+  cat("\n")
+}
+sink()
 
